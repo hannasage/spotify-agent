@@ -16,8 +16,15 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.15.1",
     "@openai/agents": "^0.0.11",
+    "@types/clear": "^0.1.4",
+    "@types/figlet": "^1.5.8",
     "@types/node": "^24.0.14",
+    "boxen": "^7.1.1",
+    "chalk": "^4.1.2",
+    "clear": "^0.1.0",
     "dotenv": "^17.2.0",
+    "figlet": "^1.7.0",
+    "ora": "^8.0.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3",
     "zod": "<=3.25.67"

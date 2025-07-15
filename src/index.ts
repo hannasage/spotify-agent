@@ -1,6 +1,7 @@
 import { Agent, run, MCPServerStdio } from '@openai/agents';
 import * as readline from 'readline';
 import * as dotenv from 'dotenv';
+import { UIManager } from './ui';
 
 dotenv.config();
 
@@ -27,8 +28,7 @@ let agent: Agent;
 async function createAgent(): Promise<Agent> {
   mcpServer = await createMCPServer();
   
-  // Debug: Check if server is properly connected
-  console.log('🔍 MCP Server created, checking connection...');
+  // MCP Server created successfully
   
   return new Agent({
     name: 'Spotify Agent',
@@ -86,37 +86,43 @@ You are an agent - please keep going until the user's query is completely resolv
 
 class ChatBot {
   private rl: readline.Interface;
+  private ui: UIManager;
 
   constructor() {
+    this.ui = new UIManager();
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
-      prompt: 'You: '
+      prompt: this.ui.getPrompt()
     });
   }
   
   async cleanup() {
+    this.ui.cleanup();
     if (mcpServer) {
       try {
         await mcpServer.close();
-        console.log('🔌 MCP server connection closed');
+        this.ui.showInfo('MCP server connection closed');
       } catch (error) {
-        console.error('❌ Error closing MCP server:', error);
+        this.ui.showError('Error closing MCP server', error instanceof Error ? error.message : String(error));
       }
     }
   }
 
   async start() {
-    console.log('🤖 Spotify Agent Chatbot started!');
-    console.log('🎵 Connecting to Spotify MCP Server...');
+    // Initialize rich CLI interface
+    this.ui.clearConsole();
+    this.ui.showBanner();
+    this.ui.showConnectionStatus('connecting');
     
     try {
       agent = await createAgent();
-      console.log('✅ Connected to Spotify MCP Server');
-      console.log('Type "exit" to quit the chat.\n');
+      this.ui.showConnectionStatus('connected');
+      this.ui.showWelcomeInstructions();
     } catch (error) {
-      console.error('❌ Failed to connect to MCP server:', error instanceof Error ? error.message : String(error));
-      console.log('💡 Make sure your Spotify MCP server is available at:', process.env.SPOTIFY_MCP_PATH);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.ui.showConnectionStatus('error', errorMessage);
+      this.ui.showError('Make sure your Spotify MCP server is available at: ' + (process.env.SPOTIFY_MCP_PATH || 'undefined'));
       process.exit(1);
     }
     
@@ -126,7 +132,7 @@ class ChatBot {
       const userInput = input.trim();
       
       if (userInput.toLowerCase() === 'exit') {
-        console.log('👋 Goodbye!');
+        this.ui.showGoodbye();
         await this.cleanup();
         this.rl.close();
         process.exit(0);
@@ -137,14 +143,23 @@ class ChatBot {
         return;
       }
       
+      // Handle special commands
+      if (userInput.toLowerCase() === '/help') {
+        this.ui.showHelp();
+        this.rl.prompt();
+        return;
+      }
+      
       try {
-        console.log('🤖 Thinking...');
+        this.ui.startSpinner('Processing your request...');
         const result = await run(agent, userInput);
-        console.log(`Bot: ${result.finalOutput}\n`);
+        this.ui.stopSpinner();
+        console.log(this.ui.formatBotResponse(result.finalOutput || 'No response received') + '\n');
       } catch (error) {
-        console.error('❌ Error:', error instanceof Error ? error.message : String(error));
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.ui.showError('Something went wrong', errorMessage);
         if (error instanceof Error && error.stack) {
-          console.error('Stack trace:', error.stack);
+          console.log(this.ui.formatBotResponse('Stack trace: ' + error.stack));
         }
         console.log('');
       }
@@ -153,7 +168,7 @@ class ChatBot {
     });
     
     this.rl.on('close', async () => {
-      console.log('👋 Goodbye!');
+      this.ui.showGoodbye();
       await this.cleanup();
       process.exit(0);
     });
@@ -161,14 +176,16 @@ class ChatBot {
 }
 
 async function main() {
+  const ui = new UIManager();
+  
   if (!process.env.OPENAI_API_KEY) {
-    console.error('❌ Please set your OPENAI_API_KEY environment variable');
+    ui.showError('Missing OpenAI API key', 'Please set your OPENAI_API_KEY environment variable');
     console.log('   Example: export OPENAI_API_KEY=sk-your-key-here');
     process.exit(1);
   }
   
   if (!process.env.SPOTIFY_MCP_PATH) {
-    console.error('❌ Please set your SPOTIFY_MCP_PATH environment variable');
+    ui.showError('Missing Spotify MCP path', 'Please set your SPOTIFY_MCP_PATH environment variable');
     console.log('   Example: export SPOTIFY_MCP_PATH=/path/to/spotify-mcp-server/build/index.js');
     process.exit(1);
   }
