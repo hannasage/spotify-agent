@@ -191,7 +191,7 @@ export class UIManager {
    */
   private parseMarkdownFormatting(text: string): string {
     // Replace **text** with chalk.bold formatting
-    return text.replace(/\*\*(.*?)\*\*/g, (match, content) => {
+    return text.replace(/\*\*(.*?)\*\*/g, (_match, content) => {
       return chalk.bold.yellow(content); // Bold + yellow for emphasis
     });
   }

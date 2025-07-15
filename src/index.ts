@@ -1,23 +1,21 @@
-import { Agent, run, MCPServerStdio, tool } from '@openai/agents';
+import { Agent, run, MCPServerStdio } from '@openai/agents';
 import * as readline from 'readline';
 import * as dotenv from 'dotenv';
-import { z } from 'zod';
+// Note: Removed unused 'z' import from zod
 import { UIManager } from './ui';
 import { SongHistoryTracker } from './history';
 import { debug } from './debug';
+import { ConversationMessage, AgentConfig } from './types';
+import { AUTO_QUEUE, CONVERSATION, ERROR_MESSAGES, SUCCESS_MESSAGES, SONG_HISTORY } from './constants';
 
 dotenv.config();
 
-// Conversation session management
-interface ConversationMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-}
-
+/**
+ * Manages conversation history for context-aware interactions
+ */
 class ConversationSession {
   private messages: ConversationMessage[] = [];
-  private readonly maxHistorySize = 20; // Keep last 20 exchanges
+  private readonly maxHistorySize = CONVERSATION.MAX_HISTORY_SIZE;
 
   addUserMessage(content: string): void {
     this.messages.push({
@@ -64,32 +62,9 @@ class ConversationSession {
 }
 
 let mcpServer: MCPServerStdio | null = null;
-let agents: { spotify: Agent; queue: Agent } | null = null;
+let agents: AgentConfig | null = null;
 
-// Handoff tools for agent communication
-const handoffToQueueAgent = tool({
-  name: 'transfer_to_queue_agent',
-  description: 'Transfer control to the queue management agent for music curation and recommendations',
-  parameters: z.object({
-    context: z.string().describe('Context about user preferences, current session, or specific queue requests'),
-    urgency: z.enum(['low', 'medium', 'high']).describe('How urgently the queue needs attention')
-  }),
-  execute: async (input) => {
-    return `Transferring to Queue Agent with context: ${input.context} (Priority: ${input.urgency})`;
-  }
-});
-
-const handoffToSpotifyAgent = tool({
-  name: 'transfer_to_spotify_agent', 
-  description: 'Transfer control back to the main Spotify assistant for user interaction',
-  parameters: z.object({
-    status: z.string().describe('Status update about queue management actions taken'),
-    recommendations_added: z.number().nullable().describe('Number of songs added to queue, or null if none')
-  }),
-  execute: async (input) => {
-    return `Returning to Spotify Agent. Status: ${input.status}${input.recommendations_added ? ` (${input.recommendations_added} songs added)` : ''}`;
-  }
-});
+// Note: Multi-agent handoff tools removed - using simplified direct approach
 
 async function createMCPServer(): Promise<MCPServerStdio> {
   if (!process.env.SPOTIFY_MCP_PATH) {
@@ -107,7 +82,7 @@ async function createMCPServer(): Promise<MCPServerStdio> {
   return server;
 }
 
-async function createAgents(): Promise<{ spotify: Agent; queue: Agent }> {
+async function createAgents(): Promise<AgentConfig> {
   mcpServer = await createMCPServer();
   
   // Create Queue Agent - specialized in music curation
@@ -157,7 +132,7 @@ You are a specialized music curation and queue management agent. Your ONLY job i
 - When in doubt, queue songs rather than adding to playlists
 
 When you complete queue management tasks, immediately transfer back to the Spotify Agent with a clear status update about what you QUEUED (not what you added to playlists).`,
-    tools: [handoffToSpotifyAgent],
+    tools: [],
     mcpServers: [mcpServer]
   });
 
@@ -238,7 +213,7 @@ When queue management is needed:
 - Explain agent coordination when it occurs
 
 You are an agent - please keep going until the user's query is completely resolved before ending your turn.`,
-    tools: [handoffToQueueAgent],
+    tools: [],
     mcpServers: [mcpServer]
   });
 
@@ -250,12 +225,10 @@ class QueueMonitorService {
   private isActive = false;
   private monitorInterval: NodeJS.Timeout | null = null;
   private ui: UIManager;
-  private conversation: ConversationSession;
   private historyTracker: SongHistoryTracker;
 
-  constructor(ui: UIManager, conversation: ConversationSession) {
+  constructor(ui: UIManager, _conversation: ConversationSession) {
     this.ui = ui;
-    this.conversation = conversation;
     this.historyTracker = new SongHistoryTracker();
   }
 
@@ -263,15 +236,15 @@ class QueueMonitorService {
     if (this.isActive) return;
     
     this.isActive = true;
-    this.ui.showInfo('🎯 Auto-queue monitor started! Will add 4 songs every 10 minutes.');
+    this.ui.showInfo(SUCCESS_MESSAGES.AUTO_QUEUE_STARTED);
     
     // Add 4 songs immediately when starting
     this.checkQueueStatus();
     
-    // Check every 10 minutes for queue status
+    // Check at regular intervals for queue status
     this.monitorInterval = setInterval(() => {
       this.checkQueueStatus();
-    }, 600000);
+    }, AUTO_QUEUE.INTERVAL_MS);
   }
 
   stop(): void {
@@ -282,23 +255,23 @@ class QueueMonitorService {
       clearInterval(this.monitorInterval);
       this.monitorInterval = null;
     }
-    this.ui.showInfo('🛑 Auto-queue monitor stopped.');
+    this.ui.showInfo(SUCCESS_MESSAGES.AUTO_QUEUE_STOPPED);
   }
 
   private async checkQueueStatus(): Promise<void> {
     if (!this.isActive || !agents) return;
 
     try {
-      // Generate random offset (0-400) and set limit to 50 for better selection
-      const randomOffset = Math.floor(Math.random() * 401); // 0-400
-      const limit = 50;
+      // Generate random offset and set limit for better selection
+      const randomOffset = Math.floor(Math.random() * (AUTO_QUEUE.MAX_RANDOM_OFFSET + 1));
+      const limit = AUTO_QUEUE.FETCH_LIMIT;
 
       // Get recent tracks to avoid repetition
       const avoidList = this.historyTracker.getAvoidList();
       const avoidInstruction = avoidList ? ` 3. Try to avoid these recently played tracks if possible: ${avoidList}` : '';
 
       // Get a random song from liked songs and add to queue
-      const result = await run(agents.spotify, `Please follow these steps: 1. Get tracks from my "Liked Songs" playlist using limit=${limit} and offset=${randomOffset} 2. Pick 4 different random songs from those ${limit} tracks (ensure no duplicates in your selection)${avoidInstruction} 4. Add those 4 songs to the current playback queue using the addToQueue tool 5. Respond with just the song names and artists that were added`, { maxTurns: 15 });
+      const result = await run(agents.spotify, `Please follow these steps: 1. Get tracks from my "Liked Songs" playlist using limit=${limit} and offset=${randomOffset} 2. Pick ${AUTO_QUEUE.SONGS_PER_BATCH} different random songs from those ${limit} tracks (ensure no duplicates in your selection)${avoidInstruction} 4. Add those ${AUTO_QUEUE.SONGS_PER_BATCH} songs to the current playback queue using the addToQueue tool 5. Respond with just the song names and artists that were added`, { maxTurns: AUTO_QUEUE.MAX_TURNS_PRIMARY });
       
       // Parse and add tracks to history
       if (result.finalOutput) {
@@ -311,12 +284,12 @@ class QueueMonitorService {
       }
     } catch (error) {
       // Handle MaxTurnsExceededError with fallback approach
-      if (error instanceof Error && error.message.includes('Max turns')) {
+      if (error instanceof Error && error.message.includes(ERROR_MESSAGES.MAX_TURNS_EXCEEDED)) {
         debug.log('🔍 [AUTO-QUEUE] Max turns exceeded, trying fallback approach...');
         
         try {
           // Fallback: simpler approach with no avoid list
-          const fallbackResult = await run(agents.spotify, `Add 4 random songs from my "Liked Songs" playlist to the current playback queue using the addToQueue tool. Respond with just the song names and artists that were added.`, { maxTurns: 8 });
+          const fallbackResult = await run(agents.spotify, `Add ${AUTO_QUEUE.SONGS_PER_BATCH} random songs from my "Liked Songs" playlist to the current playback queue using the addToQueue tool. Respond with just the song names and artists that were added.`, { maxTurns: AUTO_QUEUE.MAX_TURNS_FALLBACK });
           
           if (fallbackResult.finalOutput) {
             const newTracks = this.historyTracker.parseTracksFromResponse(fallbackResult.finalOutput);
@@ -327,7 +300,7 @@ class QueueMonitorService {
           }
         } catch (fallbackError) {
           console.error('Fallback queue addition also failed:', fallbackError);
-          this.ui.showWarning('Auto-queue failed - will retry at next interval');
+          this.ui.showWarning(ERROR_MESSAGES.QUEUE_MONITOR_FAILED);
         }
       } else {
         // Silently handle other errors to avoid disrupting the user experience
@@ -347,7 +320,7 @@ class QueueMonitorService {
       return;
     }
 
-    this.ui.showInfo('🎵 Recent song history (last 12 tracks):');
+    this.ui.showInfo(`🎵 Recent song history (last ${SONG_HISTORY.MAX_SIZE} tracks):`);
     recentTracks.forEach((track, index) => {
       const timeAgo = this.formatTimeAgo(track.timestamp);
       this.ui.showInfo(`${index + 1}. **"${track.name}"** by **${track.artist}** (${timeAgo})`);
@@ -356,7 +329,7 @@ class QueueMonitorService {
 
   clearSongHistory(): void {
     this.historyTracker.clearHistory();
-    this.ui.showInfo('🎵 Song history cleared');
+    this.ui.showInfo(SUCCESS_MESSAGES.HISTORY_CLEARED);
   }
 
   private formatTimeAgo(timestamp: Date): string {
@@ -541,17 +514,17 @@ async function main() {
   
   // Show debug status if enabled
   if (debug.isDebugEnabled()) {
-    ui.showInfo('🔍 Debug mode enabled');
+    ui.showInfo(SUCCESS_MESSAGES.DEBUG_ENABLED);
   }
   
   if (!process.env.OPENAI_API_KEY) {
-    ui.showError('Missing OpenAI API key', 'Please set your OPENAI_API_KEY environment variable');
+    ui.showError('Missing OpenAI API key', ERROR_MESSAGES.MISSING_OPENAI_KEY);
     console.log('   Example: export OPENAI_API_KEY=sk-your-key-here');
     process.exit(1);
   }
   
   if (!process.env.SPOTIFY_MCP_PATH) {
-    ui.showError('Missing Spotify MCP path', 'Please set your SPOTIFY_MCP_PATH environment variable');
+    ui.showError('Missing Spotify MCP path', ERROR_MESSAGES.MISSING_SPOTIFY_PATH);
     console.log('   Example: export SPOTIFY_MCP_PATH=/path/to/spotify-mcp-server/build/index.js');
     process.exit(1);
   }

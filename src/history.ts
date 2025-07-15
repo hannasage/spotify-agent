@@ -1,17 +1,16 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { debug } from './debug';
+import { HistoryTrack } from './types';
+import { SONG_HISTORY } from './constants';
 
-export interface HistoryTrack {
-  name: string;
-  artist: string;
-  timestamp: Date;
-}
-
+/**
+ * Manages song history to prevent repetition in auto-queue
+ */
 export class SongHistoryTracker {
   private history: HistoryTrack[] = [];
-  private readonly maxSize = 12;
-  private readonly historyFile = path.join(process.cwd(), 'song-history.json');
+  private readonly maxSize = SONG_HISTORY.MAX_SIZE;
+  private readonly historyFile = path.join(process.cwd(), SONG_HISTORY.FILE_NAME);
 
   constructor() {
     this.loadFromFile();
@@ -19,6 +18,7 @@ export class SongHistoryTracker {
 
   /**
    * Add tracks to history (newest first)
+   * @param tracks - Array of tracks to add to history
    */
   addTracks(tracks: HistoryTrack[]): void {
     // Add new tracks to the beginning
@@ -33,6 +33,7 @@ export class SongHistoryTracker {
 
   /**
    * Get recent tracks (up to maxSize)
+   * @returns Copy of current history array
    */
   getRecentTracks(): HistoryTrack[] {
     return [...this.history];
@@ -40,6 +41,7 @@ export class SongHistoryTracker {
 
   /**
    * Get formatted avoid list for agent prompt
+   * @returns Comma-separated string of tracks to avoid
    */
   getAvoidList(): string {
     if (this.history.length === 0) return '';
@@ -63,6 +65,7 @@ export class SongHistoryTracker {
 
   /**
    * Get current history size
+   * @returns Number of tracks in history
    */
   getHistorySize(): number {
     return this.history.length;
@@ -70,6 +73,8 @@ export class SongHistoryTracker {
 
   /**
    * Parse agent response to extract track information
+   * @param response - Agent response text containing track information
+   * @returns Array of parsed tracks with timestamps
    */
   parseTracksFromResponse(response: string): HistoryTrack[] {
     const tracks: HistoryTrack[] = [];
@@ -83,8 +88,8 @@ export class SongHistoryTracker {
     let match;
     
     while ((match = trackRegex.exec(response)) !== null) {
-      const name = match[1].trim();
-      const artist = match[2].trim();
+      const name = match[1]?.trim();
+      const artist = match[2]?.trim();
       
       if (name && artist) {
         tracks.push({
@@ -103,6 +108,7 @@ export class SongHistoryTracker {
 
   /**
    * Save history to file
+   * @private
    */
   private saveToFile(): void {
     try {
@@ -115,6 +121,7 @@ export class SongHistoryTracker {
 
   /**
    * Load history from file
+   * @private
    */
   private loadFromFile(): void {
     try {
