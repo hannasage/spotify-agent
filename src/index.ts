@@ -3,6 +3,7 @@ import * as readline from 'readline';
 import * as dotenv from 'dotenv';
 import { z } from 'zod';
 import { UIManager } from './ui';
+import { SongHistoryTracker } from './history';
 
 dotenv.config();
 
@@ -249,25 +250,27 @@ class QueueMonitorService {
   private monitorInterval: NodeJS.Timeout | null = null;
   private ui: UIManager;
   private conversation: ConversationSession;
+  private historyTracker: SongHistoryTracker;
 
   constructor(ui: UIManager, conversation: ConversationSession) {
     this.ui = ui;
     this.conversation = conversation;
+    this.historyTracker = new SongHistoryTracker();
   }
 
   start(): void {
     if (this.isActive) return;
     
     this.isActive = true;
-    this.ui.showInfo('🎯 Auto-queue monitor started! Will add 4 songs every 6.5 minutes.');
+    this.ui.showInfo('🎯 Auto-queue monitor started! Will add 4 songs every 10 minutes.');
     
     // Add 4 songs immediately when starting
     this.checkQueueStatus();
     
-    // Check every 6.5 minutes for queue status
+    // Check every 10 minutes for queue status
     this.monitorInterval = setInterval(() => {
       this.checkQueueStatus();
-    }, 390000);
+    }, 600000);
   }
 
   stop(): void {
@@ -285,25 +288,89 @@ class QueueMonitorService {
     if (!this.isActive || !agents) return;
 
     try {
-      // Generate random offset (0-400) and set limit to 30 for efficient random selection
+      // Generate random offset (0-400) and set limit to 50 for better selection
       const randomOffset = Math.floor(Math.random() * 401); // 0-400
-      const limit = 30;
+      const limit = 50;
+
+      // Get recent tracks to avoid repetition
+      const avoidList = this.historyTracker.getAvoidList();
+      const avoidInstruction = avoidList ? ` 3. Try to avoid these recently played tracks if possible: ${avoidList}` : '';
 
       // Get a random song from liked songs and add to queue
-      const result = await run(agents.spotify, `Please follow these steps: 1. Get tracks from my "Liked Songs" playlist using limit=${limit} and offset=${randomOffset} 2. Pick 4 random songs from those ${limit} tracks 3. Add those 4 songs to the current playback queue using the addToQueue tool 4. Respond with just the song names and artists that were added`);
+      const result = await run(agents.spotify, `Please follow these steps: 1. Get tracks from my "Liked Songs" playlist using limit=${limit} and offset=${randomOffset} 2. Pick 4 different random songs from those ${limit} tracks (ensure no duplicates in your selection)${avoidInstruction} 4. Add those 4 songs to the current playback queue using the addToQueue tool 5. Respond with just the song names and artists that were added`, { maxTurns: 15 });
       
-      // Show minimal output when song is added
+      // Parse and add tracks to history
       if (result.finalOutput) {
+        const newTracks = this.historyTracker.parseTracksFromResponse(result.finalOutput);
+        if (newTracks.length > 0) {
+          this.historyTracker.addTracks(newTracks);
+        }
+        
         this.ui.showInfo(`🎵 ANA-LOG AUTO: ${result.finalOutput}`);
       }
     } catch (error) {
-      // Silently handle errors to avoid disrupting the user experience
-      console.error('Queue monitor error:', error);
+      // Handle MaxTurnsExceededError with fallback approach
+      if (error instanceof Error && error.message.includes('Max turns')) {
+        console.log('🔍 [AUTO-QUEUE] Max turns exceeded, trying fallback approach...');
+        
+        try {
+          // Fallback: simpler approach with no avoid list
+          const fallbackResult = await run(agents.spotify, `Add 4 random songs from my "Liked Songs" playlist to the current playback queue using the addToQueue tool. Respond with just the song names and artists that were added.`, { maxTurns: 8 });
+          
+          if (fallbackResult.finalOutput) {
+            const newTracks = this.historyTracker.parseTracksFromResponse(fallbackResult.finalOutput);
+            if (newTracks.length > 0) {
+              this.historyTracker.addTracks(newTracks);
+            }
+            this.ui.showInfo(`🎵 ANA-LOG AUTO: ${fallbackResult.finalOutput}`);
+          }
+        } catch (fallbackError) {
+          console.error('Fallback queue addition also failed:', fallbackError);
+          this.ui.showWarning('Auto-queue failed - will retry at next interval');
+        }
+      } else {
+        // Silently handle other errors to avoid disrupting the user experience
+        console.error('Queue monitor error:', error);
+      }
     }
   }
 
   isRunning(): boolean {
     return this.isActive;
+  }
+
+  showSongHistory(): void {
+    const recentTracks = this.historyTracker.getRecentTracks();
+    if (recentTracks.length === 0) {
+      this.ui.showInfo('🎵 Song history is empty');
+      return;
+    }
+
+    this.ui.showInfo('🎵 Recent song history (last 24 tracks):');
+    recentTracks.forEach((track, index) => {
+      const timeAgo = this.formatTimeAgo(track.timestamp);
+      this.ui.showInfo(`${index + 1}. **"${track.name}"** by **${track.artist}** (${timeAgo})`);
+    });
+  }
+
+  clearSongHistory(): void {
+    this.historyTracker.clearHistory();
+    this.ui.showInfo('🎵 Song history cleared');
+  }
+
+  private formatTimeAgo(timestamp: Date): string {
+    const now = new Date();
+    const diffMs = now.getTime() - timestamp.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
   }
 }
 
@@ -411,6 +478,18 @@ class ChatBot {
       
       if (userInput.toLowerCase() === '/stop-queue') {
         this.queueMonitor.stop();
+        this.rl.prompt();
+        return;
+      }
+      
+      if (userInput.toLowerCase() === '/history-songs') {
+        this.queueMonitor.showSongHistory();
+        this.rl.prompt();
+        return;
+      }
+      
+      if (userInput.toLowerCase() === '/clear-history-songs') {
+        this.queueMonitor.clearSongHistory();
         this.rl.prompt();
         return;
       }
