@@ -248,12 +248,17 @@ export class UIManager {
       chalk.white('  /help') + chalk.gray('                   - Show this help message'),
       chalk.white('  /clear') + chalk.gray('                  - Clear conversation history'),
       chalk.white('  /history') + chalk.gray('                - Show conversation history count'),
+      chalk.white('  /agents') + chalk.gray('                 - Show multi-agent system status'),
+      chalk.white('  /auto-queue') + chalk.gray('              - Start automatic queue management'),
+      chalk.white('  /stop-queue') + chalk.gray('              - Stop automatic queue management'),
       chalk.white('  exit') + chalk.gray('                    - Quit the application'),
       '',
       chalk.green('💡 Tips:'),
       chalk.gray('• Use natural language - the AI understands context'),
       chalk.gray('• Be specific with artist or song names for better results'),
       chalk.gray('• The agent will confirm destructive actions before executing'),
+      chalk.gray('• Try "start auto-queue mode" for continuous music recommendations'),
+      chalk.gray('• Multi-agent system handles complex tasks via intelligent handoffs'),
       ''
     ];
 
