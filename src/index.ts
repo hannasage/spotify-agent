@@ -5,6 +5,61 @@ import { UIManager } from './ui';
 
 dotenv.config();
 
+// Conversation session management
+interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+}
+
+class ConversationSession {
+  private messages: ConversationMessage[] = [];
+  private readonly maxHistorySize = 20; // Keep last 20 exchanges
+
+  addUserMessage(content: string): void {
+    this.messages.push({
+      role: 'user',
+      content,
+      timestamp: new Date()
+    });
+    this.trimHistory();
+  }
+
+  addAssistantMessage(content: string): void {
+    this.messages.push({
+      role: 'assistant',
+      content,
+      timestamp: new Date()
+    });
+    this.trimHistory();
+  }
+
+  getFormattedHistory(): string {
+    if (this.messages.length === 0) return '';
+    
+    // Format conversation history for the agent's context
+    const historyText = this.messages
+      .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
+      .join('\n');
+    
+    return `\n\nPrevious conversation context:\n${historyText}\n\nCurrent request:`;
+  }
+
+  private trimHistory(): void {
+    if (this.messages.length > this.maxHistorySize) {
+      this.messages = this.messages.slice(-this.maxHistorySize);
+    }
+  }
+
+  clearHistory(): void {
+    this.messages = [];
+  }
+
+  getMessageCount(): number {
+    return this.messages.length;
+  }
+}
+
 let mcpServer: MCPServerStdio | null = null;
 
 async function createMCPServer(): Promise<MCPServerStdio> {
@@ -87,9 +142,11 @@ You are an agent - please keep going until the user's query is completely resolv
 class ChatBot {
   private rl: readline.Interface;
   private ui: UIManager;
+  private conversation: ConversationSession;
 
   constructor() {
     this.ui = new UIManager();
+    this.conversation = new ConversationSession();
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -150,11 +207,38 @@ class ChatBot {
         return;
       }
       
+      if (userInput.toLowerCase() === '/clear') {
+        this.conversation.clearHistory();
+        this.ui.showInfo(`Conversation history cleared. Starting fresh conversation.`);
+        this.rl.prompt();
+        return;
+      }
+      
+      if (userInput.toLowerCase() === '/history') {
+        const count = this.conversation.getMessageCount();
+        this.ui.showInfo(`Conversation has ${count} messages in history.`);
+        this.rl.prompt();
+        return;
+      }
+      
       try {
         this.ui.startSpinner('Processing your request...');
-        const result = await run(agent, userInput);
+        
+        // Add user message to conversation history
+        this.conversation.addUserMessage(userInput);
+        
+        // Create input with conversation context
+        const contextualInput = this.conversation.getFormattedHistory() + ' ' + userInput;
+        
+        const result = await run(agent, contextualInput);
         this.ui.stopSpinner();
-        console.log(this.ui.formatBotResponse(result.finalOutput || 'No response received') + '\n');
+        
+        const response = result.finalOutput || 'No response received';
+        
+        // Add assistant response to conversation history
+        this.conversation.addAssistantMessage(response);
+        
+        console.log(this.ui.formatBotResponse(response) + '\n');
       } catch (error) {
         // Ensure spinner is stopped even on error
         this.ui.stopSpinner();

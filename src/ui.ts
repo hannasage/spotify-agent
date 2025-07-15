@@ -246,6 +246,8 @@ export class UIManager {
       '',
       chalk.yellow.bold('System Commands:'),
       chalk.white('  /help') + chalk.gray('                   - Show this help message'),
+      chalk.white('  /clear') + chalk.gray('                  - Clear conversation history'),
+      chalk.white('  /history') + chalk.gray('                - Show conversation history count'),
       chalk.white('  exit') + chalk.gray('                    - Quit the application'),
       '',
       chalk.green('💡 Tips:'),
