@@ -185,11 +185,25 @@ export class UIManager {
   }
 
   /**
+   * Parse markdown-style formatting in text
+   * Converts **bold** to chalk.bold formatting
+   */
+  private parseMarkdownFormatting(text: string): string {
+    // Replace **text** with chalk.bold formatting
+    return text.replace(/\*\*(.*?)\*\*/g, (match, content) => {
+      return chalk.bold.yellow(content); // Bold + yellow for emphasis
+    });
+  }
+
+  /**
    * Format bot response with proper styling
    */
   formatBotResponse(response: string): string {
+    // Parse markdown formatting first
+    const formattedResponse = this.parseMarkdownFormatting(response);
+    
     // Add music note emoji and cyan color to bot responses
-    return chalk.cyan('🎵 Bot: ') + chalk.white(response);
+    return chalk.cyan('🎵 ANNIE: ') + chalk.white(formattedResponse);
   }
 
   /**
