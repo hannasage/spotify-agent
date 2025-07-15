@@ -1,26 +1,44 @@
-import { Agent, run, tool } from '@openai/agents';
+import { Agent, run, MCPServerStdio } from '@openai/agents';
 import { z } from 'zod';
 import * as readline from 'readline';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const basicTool = tool({
-  name: 'get_current_time',
-  description: 'Get the current time',
-  parameters: z.object({}),
-  execute: async () => {
-    return `Current time: ${new Date().toLocaleString()}`;
-  }
-});
+let mcpServer: MCPServerStdio | null = null;
 
-const agent = new Agent({
-  name: 'Spotify Agent',
-  instructions: `You are a helpful assistant that will eventually help control Spotify. 
-  For now, you can help with general questions and provide the current time when asked.
-  Be friendly and conversational.`,
-  tools: [basicTool]
-});
+async function createMCPServer(): Promise<MCPServerStdio> {
+  if (!process.env.SPOTIFY_MCP_PATH) {
+    throw new Error('SPOTIFY_MCP_PATH environment variable is not set');
+  }
+  
+  const server = new MCPServerStdio({
+    name: 'Spotify MCP Server',
+    fullCommand: `node ${process.env.SPOTIFY_MCP_PATH}`,
+    cacheToolsList: true
+  });
+  
+  // Ensure the server is properly connected
+  await server.connect();
+  return server;
+}
+
+let agent: Agent;
+
+async function createAgent(): Promise<Agent> {
+  mcpServer = await createMCPServer();
+  
+  // Debug: Check if server is properly connected
+  console.log('🔍 MCP Server created, checking connection...');
+  
+  return new Agent({
+    name: 'Spotify Agent',
+    instructions: `You are a helpful assistant that can control Spotify through various tools.
+    You can help users play music, control playback, search for songs, and manage their Spotify experience.
+    Be friendly and conversational. Always confirm actions before executing them.`,
+    mcpServers: [mcpServer]
+  });
+}
 
 class ChatBot {
   private rl: readline.Interface;
@@ -32,10 +50,31 @@ class ChatBot {
       prompt: 'You: '
     });
   }
+  
+  async cleanup() {
+    if (mcpServer) {
+      try {
+        await mcpServer.close();
+        console.log('🔌 MCP server connection closed');
+      } catch (error) {
+        console.error('❌ Error closing MCP server:', error);
+      }
+    }
+  }
 
   async start() {
     console.log('🤖 Spotify Agent Chatbot started!');
-    console.log('Type "exit" to quit the chat.\n');
+    console.log('🎵 Connecting to Spotify MCP Server...');
+    
+    try {
+      agent = await createAgent();
+      console.log('✅ Connected to Spotify MCP Server');
+      console.log('Type "exit" to quit the chat.\n');
+    } catch (error) {
+      console.error('❌ Failed to connect to MCP server:', error instanceof Error ? error.message : String(error));
+      console.log('💡 Make sure your Spotify MCP server is available at:', process.env.SPOTIFY_MCP_PATH);
+      process.exit(1);
+    }
     
     this.rl.prompt();
     
@@ -44,6 +83,7 @@ class ChatBot {
       
       if (userInput.toLowerCase() === 'exit') {
         console.log('👋 Goodbye!');
+        await this.cleanup();
         this.rl.close();
         process.exit(0);
       }
@@ -59,14 +99,18 @@ class ChatBot {
         console.log(`Bot: ${result.finalOutput}\n`);
       } catch (error) {
         console.error('❌ Error:', error instanceof Error ? error.message : String(error));
+        if (error instanceof Error && error.stack) {
+          console.error('Stack trace:', error.stack);
+        }
         console.log('');
       }
       
       this.rl.prompt();
     });
     
-    this.rl.on('close', () => {
+    this.rl.on('close', async () => {
       console.log('👋 Goodbye!');
+      await this.cleanup();
       process.exit(0);
     });
   }
@@ -76,6 +120,12 @@ async function main() {
   if (!process.env.OPENAI_API_KEY) {
     console.error('❌ Please set your OPENAI_API_KEY environment variable');
     console.log('   Example: export OPENAI_API_KEY=sk-your-key-here');
+    process.exit(1);
+  }
+  
+  if (!process.env.SPOTIFY_MCP_PATH) {
+    console.error('❌ Please set your SPOTIFY_MCP_PATH environment variable');
+    console.log('   Example: export SPOTIFY_MCP_PATH=/path/to/spotify-mcp-server/build/index.js');
     process.exit(1);
   }
   
