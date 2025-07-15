@@ -259,12 +259,12 @@ class QueueMonitorService {
     if (this.isActive) return;
     
     this.isActive = true;
-    this.ui.showInfo('🎯 Auto-queue monitor started! Will check queue status periodically.');
+    this.ui.showInfo('🎯 Auto-queue monitor started! Will add 1 song every 90 seconds.');
     
-    // Check every 30 seconds for queue status
+    // Check every 90 seconds for queue status
     this.monitorInterval = setInterval(() => {
       this.checkQueueStatus();
-    }, 30000);
+    }, 90000);
   }
 
   stop(): void {
@@ -282,14 +282,11 @@ class QueueMonitorService {
     if (!this.isActive || !agents) return;
 
     try {
-      // Use the queue agent to check and potentially add songs
-      const contextualInput = this.conversation.getFormattedHistory() + ' Check queue status and add songs if needed (background auto-queue mode)';
+      // Get a random song from liked songs and add to queue
+      const result = await run(agents.spotify, 'Please follow these steps: 1. Access my "Liked Songs" playlist and get its contents 2. Pick one random song from that playlist 3. Add that song to the current playback queue using the addToQueue tool 4. Respond with just the song name and artist that was added');
       
-      // This would trigger the queue agent if the queue is low - QUEUE ONLY, NO PLAYLISTS
-      const result = await run(agents.spotify, 'auto-queue check - check if playback queue is low and add songs to QUEUE (not playlists) if needed');
-      
-      // Only show output if something was actually added
-      if (result.finalOutput && (result.finalOutput.includes('added') || result.finalOutput.includes('queue'))) {
+      // Show minimal output when song is added
+      if (result.finalOutput) {
         this.ui.showInfo(`🎵 Auto-queue: ${result.finalOutput}`);
       }
     } catch (error) {
