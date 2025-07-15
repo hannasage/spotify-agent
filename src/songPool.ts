@@ -317,8 +317,17 @@ export class SongPoolManager {
     for (const line of lines) {
       const trimmedLine = line.trim();
       
-      // Match pattern: 1. "Track Name" by Artist Name (duration) - ID: track_id - Added: date
-      const match = trimmedLine.match(/^\d+\.\s*["""]([^"""]+)["""]?\s+by\s+([^(]+)\s*\([^)]+\)\s*-\s*ID:\s*(\S+)/i);
+      // Try multiple patterns to be more robust
+      let match;
+      
+      // Pattern 1: 1. **"Track Name"** by Artist Name (duration) - ID: track_id - Added: date
+      match = trimmedLine.match(/^\d+\.\s*(?:\*\*)?["""]([^"""]+)["""]?(?:\*\*)?\s+by\s+([^(]+)\s*\([^)]+\)\s*-\s*ID:\s*(\S+)/i);
+      
+      // Pattern 2: 1. **"Track Name by Artist"** (duration) - ID: track_id - Added: date
+      if (!match) {
+        match = trimmedLine.match(/^\d+\.\s*(?:\*\*)?["""]([^"""]+)\s+by\s+([^"""*]+?)(?:\*\*)?\s*["""]?\s*\([^)]+\)\s*-\s*ID:\s*(\S+)/i);
+      }
+      
       if (match) {
         const name = match[1]?.trim();
         const artist = match[2]?.trim();

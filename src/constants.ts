@@ -20,8 +20,8 @@ export const AUTO_QUEUE = {
 
 // Song pool configuration
 export const SONG_POOL = {
-  /** Number of songs to fetch per pool refresh */
-  FETCH_SIZE: 100,
+  /** Number of songs to fetch per pool refresh (Spotify API limit is 50) */
+  FETCH_SIZE: 50,
   /** Maximum random offset for fetching songs */
   MAX_RANDOM_OFFSET: 500,
   /** Maximum turns allowed for pool refresh */
