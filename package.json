@@ -4,8 +4,9 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "dev": "ts-node src/index.ts",
-    "start": "node dist/index.js",
+    "dev": "npm run auth;ts-node src/index.ts",
+    "start": "npm run auth;node dist/index.js",
+    "auth": "cd ../spotify-mcp-server; npm run auth; npm run build; cd ../spotify-agent",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
