@@ -2,13 +2,13 @@ import { run } from '@openai/agents';
 import * as readline from 'readline';
 import * as dotenv from 'dotenv';
 import { UIManager } from './ui';
-import { NaturalLanguageCommandParser } from './commandParser';
 import { debug } from './debug';
 import { AgentConfig } from './types';
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from './constants';
 import { ConversationSession } from './conversation';
 import { QueueMonitorService } from './queueMonitor';
 import { createAgents, cleanupMCPServer } from './agents';
+import { CommandRouter, SystemContext } from './tools';
 
 dotenv.config();
 
@@ -27,13 +27,22 @@ class ChatBot {
   private ui: UIManager;
   private conversation: ConversationSession;
   private queueMonitor: QueueMonitorService;
-  private commandParser: NaturalLanguageCommandParser;
+  private commandRouter: CommandRouter;
 
   constructor() {
     this.ui = new UIManager();
     this.conversation = new ConversationSession();
     this.queueMonitor = new QueueMonitorService(this.ui, this.conversation);
-    this.commandParser = new NaturalLanguageCommandParser();
+    
+    // Initialize command router with system context
+    const systemContext: SystemContext = {
+      ui: this.ui,
+      conversation: this.conversation,
+      queueMonitor: this.queueMonitor,
+      agents: null // Will be updated when agents are initialized
+    };
+    this.commandRouter = new CommandRouter(systemContext);
+    
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -140,9 +149,19 @@ class ChatBot {
     
     try {
       agents = await createAgents();
+      
+      // Update command router context with initialized agents
+      const updatedContext: SystemContext = {
+        ui: this.ui,
+        conversation: this.conversation,
+        queueMonitor: this.queueMonitor,
+        agents: agents
+      };
+      this.commandRouter.updateContext(updatedContext);
+      
       this.ui.showConnectionStatus('connected');
       this.ui.showWelcomeInstructions();
-      this.ui.showInfo('🤖 Multi-agent system ready! Spotify Assistant + Queue Manager available.');
+      this.ui.showInfo('🤖 Multi-agent system ready! Spotify Assistant + Queue Manager + Command Router available.');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.ui.showConnectionStatus('error', errorMessage);
@@ -190,51 +209,58 @@ class ChatBot {
       return;
     }
     
-    // Handle system commands (both slash commands and natural language)
-    const commandToExecute = this.parseCommand(userInput);
-    
-    // Execute system command if it's a slash command
-    if (commandToExecute.startsWith('/')) {
-      const wasHandled = await this.executeSystemCommand(commandToExecute);
-      if (wasHandled) {
-        this.rl.prompt();
-        return;
+    try {
+      // Use command router for intelligent parsing
+      debug.log(`📥 [INPUT] Processing: "${userInput}"`);
+      const routerResult = await this.commandRouter.routeCommand(userInput);
+      
+      switch (routerResult.type) {
+        case 'system_success':
+          // System command executed successfully
+          debug.log(`✅ [INPUT] System command completed: ${routerResult.content}`);
+          this.rl.prompt();
+          return;
+          
+        case 'error':
+          // System command failed
+          this.ui.showError('Command failed', routerResult.content);
+          this.rl.prompt();
+          return;
+          
+        case 'clarification':
+          // Agent needs clarification
+          this.ui.showInfo(`🤖 ${routerResult.content}`);
+          this.rl.prompt();
+          return;
+          
+        case 'spotify':
+          // Route to Spotify agent
+          await this.handleSpotifyInteraction(routerResult.content);
+          this.rl.prompt();
+          return;
+          
+        default:
+          // Default to Spotify interaction
+          await this.handleSpotifyInteraction(userInput);
+          this.rl.prompt();
       }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      debug.log(`❌ [INPUT] Error processing input: ${errorMessage}`);
+      
+      // Fallback to Spotify interaction on any error
+      await this.handleSpotifyInteraction(userInput);
+      this.rl.prompt();
     }
-    
-    // Handle regular chat interaction
-    await this.handleChatInteraction(userInput);
-    this.rl.prompt();
   }
 
-  /**
-   * Parse user input to detect system commands
-   * @param userInput - The user input to parse
-   * @returns The command to execute (may be modified from original input)
-   * @private
-   */
-  private parseCommand(userInput: string): string {
-    // Check if it's already a slash command
-    if (userInput.startsWith('/')) {
-      return userInput;
-    }
-    
-    // Check if it's a natural language command
-    const detectedCommand = this.commandParser.parseCommand(userInput);
-    if (detectedCommand) {
-      this.ui.showInfo(`🤖 Detected command: ${detectedCommand}`);
-      return detectedCommand;
-    }
-    
-    return userInput;
-  }
 
   /**
-   * Handle regular chat interaction with the Spotify agent
-   * @param userInput - The user input to process
+   * Handle Spotify interaction with the Spotify agent
+   * @param userInput - The user input to process (music-related requests)
    * @private
    */
-  private async handleChatInteraction(userInput: string): Promise<void> {
+  private async handleSpotifyInteraction(userInput: string): Promise<void> {
     if (!agents) {
       this.ui.showError('Agents not initialized', 'Please wait for the system to connect');
       return;
