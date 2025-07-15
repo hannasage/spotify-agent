@@ -226,9 +226,14 @@ export class SongPoolManager {
     try {
       debug.log('🔍 [SONG-POOL] Fetching new songs from Spotify...');
       
-      // Use the getUsersSavedTracks tool to get liked songs
+      // Use the getUsersSavedTracks tool to get liked songs and parse them
       const result = await run(this.agent, 
-        `Use the getUsersSavedTracks tool to get ${SONG_POOL.FETCH_SIZE} songs from my Liked Songs library with limit=${SONG_POOL.FETCH_SIZE} and offset=${this.generateRandomOffset()}. Return the results from the tool exactly as they are provided.`, 
+        `Use the getUsersSavedTracks tool to get ${SONG_POOL.FETCH_SIZE} songs from my Liked Songs library with limit=${SONG_POOL.FETCH_SIZE} and offset=${this.generateRandomOffset()}. Then parse the results and return them as a JSON array with this exact format:
+        [
+          {"id": "spotify_track_id", "name": "Song Name", "artist": "Artist Name"},
+          {"id": "spotify_track_id", "name": "Song Name", "artist": "Artist Name"}
+        ]
+        Return ONLY the JSON array, no other text.`, 
         { maxTurns: SONG_POOL.MAX_TURNS }
       );
 
@@ -245,9 +250,11 @@ export class SongPoolManager {
         } else {
           debug.log('🔍 [SONG-POOL] No songs parsed from response, trying fallback approach');
           
-          // Fallback: Try a much simpler approach
+          // Fallback: Try a much simpler approach with JSON parsing
           const fallbackResult = await run(this.agent, 
-            `Use the getUsersSavedTracks tool to get 20 songs from my Liked Songs library with limit=20 and offset=0. Return the results from the tool exactly as they are provided.`, 
+            `Use the getUsersSavedTracks tool to get 20 songs from my Liked Songs library with limit=20 and offset=0. Then parse the results and return them as a JSON array with this format:
+            [{"id": "spotify_track_id", "name": "Song Name", "artist": "Artist Name"}]
+            Return ONLY the JSON array, no other text.`, 
             { maxTurns: 5 }
           );
           
@@ -298,53 +305,49 @@ export class SongPoolManager {
   /**
    * Parse tracks from agent response
    * 
-   * Parses the structured response from the getUsersSavedTracks tool.
-   * Expected format: 1. "Track Name" by Artist Name (duration) - ID: track_id - Added: date
+   * Parses JSON response from the agent containing structured track data.
+   * Expected format: [{"id": "track_id", "name": "Song Name", "artist": "Artist Name"}]
    * 
-   * This parser is robust and handles various formatting variations while
-   * extracting the essential track information (name, artist, Spotify ID).
+   * This approach is much more robust than regex parsing and handles
+   * any formatting variations in the original Spotify API response.
    * 
    * @private
-   * @param response - Raw response text from the getUsersSavedTracks tool
+   * @param response - JSON response from the agent
    * @returns Array of parsed track objects
    */
   private parseTracksFromResponse(response: string): SongPoolTrack[] {
     const tracks: SongPoolTrack[] = [];
     
-    // Look for numbered list format from getUsersSavedTracks
-    const lines = response.split('\n');
-    
-    for (const line of lines) {
-      const trimmedLine = line.trim();
+    try {
+      // Try to parse as JSON first
+      const trimmedResponse = response.trim();
       
-      // Try multiple patterns to be more robust
-      let match;
+      // Look for JSON array in the response (might be wrapped in text)
+      const jsonMatch = trimmedResponse.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      const jsonString = jsonMatch ? jsonMatch[0] : trimmedResponse;
       
-      // Pattern 1: 1. **"Track Name"** by Artist Name (duration) - ID: track_id - Added: date
-      match = trimmedLine.match(/^\d+\.\s*(?:\*\*)?["""]([^"""]+)["""]?(?:\*\*)?\s+by\s+([^(]+)\s*\([^)]+\)\s*-\s*ID:\s*(\S+)/i);
+      const parsedTracks = JSON.parse(jsonString);
       
-      // Pattern 2: 1. **"Track Name by Artist"** (duration) - ID: track_id - Added: date
-      if (!match) {
-        match = trimmedLine.match(/^\d+\.\s*(?:\*\*)?["""]([^"""]+)\s+by\s+([^"""*]+?)(?:\*\*)?\s*["""]?\s*\([^)]+\)\s*-\s*ID:\s*(\S+)/i);
-      }
-      
-      if (match) {
-        const name = match[1]?.trim();
-        const artist = match[2]?.trim();
-        const id = match[3]?.trim();
-        
-        if (name && artist && id) {
-          tracks.push({
-            id,
-            name,
-            artist,
-            addedAt: new Date()
-          });
+      if (Array.isArray(parsedTracks)) {
+        for (const track of parsedTracks) {
+          if (track.id && track.name && track.artist) {
+            tracks.push({
+              id: track.id.trim(),
+              name: track.name.trim(),
+              artist: track.artist.trim(),
+              addedAt: new Date()
+            });
+          }
         }
       }
+    } catch (error) {
+      debug.log(`🔍 [SONG-POOL] JSON parsing failed, falling back to regex parsing`);
+      
+      // Fallback to regex parsing for backward compatibility
+      return this.parseTracksWithRegex(response);
     }
     
-    debug.log(`🔍 [SONG-POOL] Parsed ${tracks.length} tracks from response`);
+    debug.log(`🔍 [SONG-POOL] Parsed ${tracks.length} tracks from JSON response`);
     if (tracks.length === 0) {
       debug.log(`🔍 [SONG-POOL] Raw response: ${response.substring(0, 500)}...`);
     }
@@ -353,10 +356,71 @@ export class SongPoolManager {
   }
 
   /**
-   * Parse fallback response with same format as main parser
+   * Legacy regex-based parsing for backward compatibility
    * 
-   * Fallback parser that uses the same logic as the main parser.
-   * Separated for clarity and potential future differentiation.
+   * This method handles the original text-based response formats
+   * when JSON parsing fails.
+   * 
+   * @private
+   * @param response - Raw text response from getUsersSavedTracks
+   * @returns Array of parsed track objects
+   */
+  private parseTracksWithRegex(response: string): SongPoolTrack[] {
+    const tracks: SongPoolTrack[] = [];
+    const lines = response.split('\n');
+    
+    let currentTrack: { name?: string; artist?: string; id?: string } = {};
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      
+      // Pattern for track line: 1. **Track Name** by Artist Name (duration) - Added: date
+      const trackMatch = trimmedLine.match(/^\d+\.\s*(?:\*\*)?([^*]+?)(?:\*\*)?\s+by\s+([^(]+)\s*\([^)]+\)/i);
+      if (trackMatch) {
+        // If we have a pending track, save it
+        if (currentTrack.name && currentTrack.artist && currentTrack.id) {
+          tracks.push({
+            id: currentTrack.id,
+            name: currentTrack.name,
+            artist: currentTrack.artist,
+            addedAt: new Date()
+          });
+        }
+        
+        // Start new track
+        const name = trackMatch[1]?.trim().replace(/["""]/g, '');
+        const artist = trackMatch[2]?.trim();
+        if (name && artist) {
+          currentTrack = { name, artist };
+        }
+      }
+      
+      // Pattern for ID line: - ID: track_id
+      const idMatch = trimmedLine.match(/^-\s*ID:\s*(\S+)/i);
+      if (idMatch && currentTrack.name && currentTrack.artist) {
+        const id = idMatch[1]?.trim();
+        if (id) {
+          currentTrack.id = id;
+        }
+      }
+    }
+    
+    // Don't forget the last track
+    if (currentTrack.name && currentTrack.artist && currentTrack.id) {
+      tracks.push({
+        id: currentTrack.id,
+        name: currentTrack.name,
+        artist: currentTrack.artist,
+        addedAt: new Date()
+      });
+    }
+    
+    debug.log(`🔍 [SONG-POOL] Regex fallback parsed ${tracks.length} tracks`);
+    return tracks;
+  }
+
+  /**
+   * Parse fallback response with same format as main parser
    * 
    * @private
    * @param response - Raw response text from fallback getUsersSavedTracks call
