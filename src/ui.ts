@@ -6,6 +6,7 @@ import ora, { Ora } from 'ora';
 
 export class UIManager {
   private currentSpinner: Ora | null = null;
+  private isSpinnerActive: boolean = false;
 
   /**
    * Clear the console
@@ -109,11 +110,19 @@ export class UIManager {
    */
   startSpinner(text: string): void {
     this.stopSpinner();
-    this.currentSpinner = ora({
-      text: chalk.cyan(text),
-      spinner: 'dots',
-      color: 'cyan'
-    }).start();
+    try {
+      this.currentSpinner = ora({
+        text: chalk.cyan(text),
+        spinner: 'dots',
+        color: 'cyan',
+        discardStdin: false  // Prevent readline interface conflicts
+      }).start();
+      this.isSpinnerActive = true;
+    } catch (error) {
+      // Fallback: if spinner fails, just show a simple message
+      console.log(chalk.cyan('⏳ ' + text));
+      this.isSpinnerActive = false;
+    }
   }
 
   /**
@@ -129,9 +138,16 @@ export class UIManager {
    * Stop the current spinner
    */
   stopSpinner(): void {
-    if (this.currentSpinner) {
-      this.currentSpinner.stop();
-      this.currentSpinner = null;
+    if (this.currentSpinner && this.isSpinnerActive) {
+      try {
+        this.currentSpinner.stop();
+      } catch (error) {
+        // Silently handle spinner stop errors to prevent REPL disruption
+        console.error('Warning: Error stopping spinner:', error);
+      } finally {
+        this.currentSpinner = null;
+        this.isSpinnerActive = false;
+      }
     }
   }
 
@@ -262,5 +278,8 @@ export class UIManager {
    */
   cleanup(): void {
     this.stopSpinner();
+    // Force cleanup of any remaining spinner state
+    this.currentSpinner = null;
+    this.isSpinnerActive = false;
   }
 }

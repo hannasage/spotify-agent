@@ -156,6 +156,8 @@ class ChatBot {
         this.ui.stopSpinner();
         console.log(this.ui.formatBotResponse(result.finalOutput || 'No response received') + '\n');
       } catch (error) {
+        // Ensure spinner is stopped even on error
+        this.ui.stopSpinner();
         const errorMessage = error instanceof Error ? error.message : String(error);
         this.ui.showError('Something went wrong', errorMessage);
         if (error instanceof Error && error.stack) {
