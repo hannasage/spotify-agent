@@ -174,7 +174,8 @@ export class UIManager {
    * Show info message
    */
   showInfo(message: string): void {
-    console.log(chalk.blue('ℹ️  ' + message));
+    const formattedMessage = this.parseMarkdownFormatting(message);
+    console.log(chalk.blue('ℹ️  ') + chalk.white(formattedMessage));
   }
 
   /**
@@ -203,7 +204,7 @@ export class UIManager {
     const formattedResponse = this.parseMarkdownFormatting(response);
     
     // Add music note emoji and cyan color to bot responses
-    return chalk.cyan('🎵 ANNIE: ') + chalk.white(formattedResponse);
+    return chalk.cyan('🎵 ANA-LOG: ') + chalk.white(formattedResponse);
   }
 
   /**

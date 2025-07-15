@@ -259,12 +259,15 @@ class QueueMonitorService {
     if (this.isActive) return;
     
     this.isActive = true;
-    this.ui.showInfo('🎯 Auto-queue monitor started! Will add 1 song every 90 seconds.');
+    this.ui.showInfo('🎯 Auto-queue monitor started! Will add 4 songs every 6.5 minutes.');
     
-    // Check every 90 seconds for queue status
+    // Add 4 songs immediately when starting
+    this.checkQueueStatus();
+    
+    // Check every 6.5 minutes for queue status
     this.monitorInterval = setInterval(() => {
       this.checkQueueStatus();
-    }, 90000);
+    }, 390000);
   }
 
   stop(): void {
@@ -282,12 +285,16 @@ class QueueMonitorService {
     if (!this.isActive || !agents) return;
 
     try {
+      // Generate random offset (0-400) and set limit to 30 for efficient random selection
+      const randomOffset = Math.floor(Math.random() * 401); // 0-400
+      const limit = 30;
+
       // Get a random song from liked songs and add to queue
-      const result = await run(agents.spotify, 'Please follow these steps: 1. Access my "Liked Songs" playlist and get its contents 2. Pick one random song from that playlist 3. Add that song to the current playback queue using the addToQueue tool 4. Respond with just the song name and artist that was added');
+      const result = await run(agents.spotify, `Please follow these steps: 1. Get tracks from my "Liked Songs" playlist using limit=${limit} and offset=${randomOffset} 2. Pick 4 random songs from those ${limit} tracks 3. Add those 4 songs to the current playback queue using the addToQueue tool 4. Respond with just the song names and artists that were added`);
       
       // Show minimal output when song is added
       if (result.finalOutput) {
-        this.ui.showInfo(`🎵 Auto-queue: ${result.finalOutput}`);
+        this.ui.showInfo(`🎵 ANA-LOG AUTO: ${result.finalOutput}`);
       }
     } catch (error) {
       // Silently handle errors to avoid disrupting the user experience
