@@ -14,12 +14,40 @@ export interface ConversationMessage {
 
 /** Represents a track in the song history */
 export interface HistoryTrack {
+  /** Spotify track ID (optional for backward compatibility) */
+  id?: string;
   /** Name of the song */
   name: string;
   /** Artist name */
   artist: string;
   /** Timestamp when the track was added to history */
   timestamp: Date;
+}
+
+/** Represents a track in the song pool */
+export interface SongPoolTrack {
+  /** Spotify track ID */
+  id: string;
+  /** Name of the song */
+  name: string;
+  /** Artist name */
+  artist: string;
+  /** Timestamp when the track was added to pool */
+  addedAt: Date;
+}
+
+/** Configuration for song pool management */
+export interface SongPoolConfig {
+  /** Number of songs to fetch per refresh */
+  fetchSize: number;
+  /** Maximum random offset for fetching */
+  maxRandomOffset: number;
+  /** Maximum turns for pool refresh */
+  maxTurns: number;
+  /** Minimum time between refreshes in milliseconds */
+  minRefreshIntervalMs: number;
+  /** Maximum number of played songs to remember */
+  maxPlayedHistory: number;
 }
 
 /** Configuration for connection status display */

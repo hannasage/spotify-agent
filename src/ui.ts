@@ -254,6 +254,8 @@ export class UIManager {
       chalk.white('  /stop-queue') + chalk.gray('              - Stop automatic queue management'),
       chalk.white('  /history-songs') + chalk.gray('            - Show recent song history (last 12)'),
       chalk.white('  /clear-history-songs') + chalk.gray('       - Clear song history'),
+      chalk.white('  /pool-stats') + chalk.gray('              - Show song pool statistics'),
+      chalk.white('  /refresh-pool') + chalk.gray('            - Force refresh song pool'),
       chalk.white('  exit') + chalk.gray('                    - Quit the application'),
       '',
       chalk.green('💡 Tips:'),
@@ -262,6 +264,13 @@ export class UIManager {
       chalk.gray('• The agent will confirm destructive actions before executing'),
       chalk.gray('• Try "start auto-queue mode" for continuous music recommendations'),
       chalk.gray('• Multi-agent system handles complex tasks via intelligent handoffs'),
+      '',
+      chalk.yellow.bold('🗣️  Natural Language Commands:'),
+      chalk.gray('• "show me the pool stats" - Check song pool status'),
+      chalk.gray('• "refresh the song pool" - Get fresh songs'),
+      chalk.gray('• "start auto queue" - Begin automatic queueing'),
+      chalk.gray('• "show my recent songs" - Display song history'),
+      chalk.gray('• "clear conversation history" - Reset chat'),
       ''
     ];
 

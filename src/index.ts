@@ -1,363 +1,39 @@
-import { Agent, run, MCPServerStdio } from '@openai/agents';
+import { run } from '@openai/agents';
 import * as readline from 'readline';
 import * as dotenv from 'dotenv';
-// Note: Removed unused 'z' import from zod
 import { UIManager } from './ui';
-import { SongHistoryTracker } from './history';
+import { NaturalLanguageCommandParser } from './commandParser';
 import { debug } from './debug';
-import { ConversationMessage, AgentConfig } from './types';
-import { AUTO_QUEUE, CONVERSATION, ERROR_MESSAGES, SUCCESS_MESSAGES, SONG_HISTORY } from './constants';
+import { AgentConfig } from './types';
+import { ERROR_MESSAGES, SUCCESS_MESSAGES } from './constants';
+import { ConversationSession } from './conversation';
+import { QueueMonitorService } from './queueMonitor';
+import { createAgents, cleanupMCPServer } from './agents';
 
 dotenv.config();
 
-/**
- * Manages conversation history for context-aware interactions
- */
-class ConversationSession {
-  private messages: ConversationMessage[] = [];
-  private readonly maxHistorySize = CONVERSATION.MAX_HISTORY_SIZE;
 
-  addUserMessage(content: string): void {
-    this.messages.push({
-      role: 'user',
-      content,
-      timestamp: new Date()
-    });
-    this.trimHistory();
-  }
-
-  addAssistantMessage(content: string): void {
-    this.messages.push({
-      role: 'assistant',
-      content,
-      timestamp: new Date()
-    });
-    this.trimHistory();
-  }
-
-  getFormattedHistory(): string {
-    if (this.messages.length === 0) return '';
-    
-    // Format conversation history for the agent's context
-    const historyText = this.messages
-      .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
-      .join('\n');
-    
-    return `\n\nPrevious conversation context:\n${historyText}\n\nCurrent request:`;
-  }
-
-  private trimHistory(): void {
-    if (this.messages.length > this.maxHistorySize) {
-      this.messages = this.messages.slice(-this.maxHistorySize);
-    }
-  }
-
-  clearHistory(): void {
-    this.messages = [];
-  }
-
-  getMessageCount(): number {
-    return this.messages.length;
-  }
-}
-
-let mcpServer: MCPServerStdio | null = null;
 let agents: AgentConfig | null = null;
 
-// Note: Multi-agent handoff tools removed - using simplified direct approach
 
-async function createMCPServer(): Promise<MCPServerStdio> {
-  if (!process.env.SPOTIFY_MCP_PATH) {
-    throw new Error('SPOTIFY_MCP_PATH environment variable is not set');
-  }
-  
-  const server = new MCPServerStdio({
-    name: 'Spotify MCP Server',
-    fullCommand: `node ${process.env.SPOTIFY_MCP_PATH}`,
-    cacheToolsList: true
-  });
-  
-  // Ensure the server is properly connected
-  await server.connect();
-  return server;
-}
-
-async function createAgents(): Promise<AgentConfig> {
-  mcpServer = await createMCPServer();
-  
-  // Create Queue Agent - specialized in music curation
-  const queueAgent = new Agent({
-    name: 'Queue Manager',
-    model: 'gpt-4o-mini',
-    instructions: `## Role and Environment
-You are a specialized music curation and queue management agent. Your ONLY job is to manage Spotify's playback QUEUE - the list of songs that will play next after the current track.
-
-## CRITICAL: QUEUE vs PLAYLIST Distinction
-- **QUEUE**: The temporary list of upcoming songs in the current playback session - THIS IS YOUR ONLY FOCUS
-- **PLAYLIST**: Permanent collections of songs saved to user's library - DO NOT TOUCH THESE
-- **YOU MUST ONLY ADD SONGS TO THE QUEUE, NEVER TO PLAYLISTS**
-
-## Core Capabilities
-- Add songs to Spotify's playback queue using queue/add functionality
-- Analyze user's saved tracks for queue recommendations
-- Monitor current queue status and length
-- Coordinate with the main Spotify assistant via handoffs
-
-## Queue Management Strategy - QUEUE ONLY
-- Use "add to queue" or "queue" commands/tools EXCLUSIVELY
-- Add 3-5 songs at a time to the playback queue
-- Analyze user's saved tracks for genre, artist, and audio feature patterns
-- Create diverse but cohesive queue additions
-- Consider tempo, energy, and mood continuity
-- NEVER use "add to playlist" or "create playlist" functionality
-
-## Handoff Protocol
-- You receive control when queue management is needed
-- Use ONLY queue-related tools and commands
-- Add songs to the current playback queue (not playlists)
-- Always transfer back to the Spotify Agent with a status update
-- Include information about what you queued and why
-
-## Analysis Approach
-- Look for patterns in user's liked songs (genres, artists, audio features)
-- Balance familiar favorites with discovery recommendations
-- Consider tempo, energy, and mood continuity
-- Avoid repetition while maintaining user preferences
-- ADD TO QUEUE ONLY - never create or modify playlists
-
-## IMPORTANT REMINDERS
-- Use "queue" functionality exclusively
-- Do not create, modify, or add to any playlists
-- Focus on the temporary playback queue for continuous music
-- When in doubt, queue songs rather than adding to playlists
-
-When you complete queue management tasks, immediately transfer back to the Spotify Agent with a clear status update about what you QUEUED (not what you added to playlists).`,
-    tools: [],
-    mcpServers: [mcpServer]
-  });
-
-  // Create main Spotify Agent - handles user interaction and delegates queue management
-  const spotifyAgent = new Agent({
-    name: 'Spotify Assistant',
-    model: 'gpt-4o-mini',
-    instructions: `## Role and Environment
-You are the primary Spotify control assistant that handles user interaction while coordinating with a specialized Queue Manager for continuous music experiences.
-
-## Core Capabilities
-- Music playback control (play, pause, skip, volume adjustment)
-- Search functionality (songs, artists, albums, playlists)
-- Playlist management and creation
-- User library management
-- Basic queue operations
-- Device management and switching
-- **Queue delegation to specialized Queue Manager**
-
-## Multi-Agent Coordination
-
-### When to Transfer to Queue Agent
-- User requests "auto-queue mode" or continuous music
-- Queue is running low (< 3 songs remaining)
-- User asks for recommendations or music discovery
-- Need for intelligent queue building based on preferences
-- ANY request to add songs to the playback queue
-
-### Queue Management Handoff
-When queue management is needed:
-1. Use transfer_to_queue_agent with relevant context
-2. Include user preferences, current listening session info
-3. Specify urgency level (low/medium/high)
-4. EXPLICITLY mention "add to queue, not playlists" in the context
-5. Let Queue Manager handle ONLY queue operations and return with status
-
-### IMPORTANT: Queue vs Playlist Distinction
-- **QUEUE**: Temporary playback list - delegate to Queue Manager
-- **PLAYLIST**: Permanent collections - handle yourself, never delegate
-- Always specify "queue operations only" when transferring to Queue Manager
-
-## Operational Guidelines
-
-### Planning and Execution
-- Before executing any action, provide a brief plan of what you intend to do
-- Break complex requests into clear, sequential steps
-- Always use the most appropriate tool for each specific task
-- Delegate queue management to the specialized agent when appropriate
-
-### User Interaction Standards
-- Maintain a friendly, conversational tone while being precise and helpful
-- Always confirm destructive or significant actions before execution
-- Provide clear feedback about what actions were performed and their results
-- If a request is ambiguous, ask clarifying questions to ensure accuracy
-- Explain when you're coordinating with the Queue Manager
-
-### Error Handling and Recovery
-- If a tool fails, explain what went wrong and suggest alternative approaches
-- Gracefully handle Spotify API limitations or authentication issues
-- Never assume success - always verify results when possible
-
-### Context Awareness
-- Remember the user's current playback state and preferences within the conversation
-- Consider the user's music library and listening history when making recommendations
-- Adapt responses based on the user's apparent familiarity with Spotify features
-- Maintain context across agent handoffs
-
-## Important Constraints
-- Only use available MCP tools for Spotify interaction
-- Do not attempt to access files, networks, or systems outside of the provided Spotify tools
-- Always prioritize user privacy and data security
-- Confirm before making changes that affect the user's saved music or playlists
-
-## Response Format
-- Begin responses with a brief acknowledgment of the user's request
-- Provide status updates during multi-step operations
-- End with clear confirmation of completed actions or next steps if applicable
-- Explain agent coordination when it occurs
-
-You are an agent - please keep going until the user's query is completely resolved before ending your turn.`,
-    tools: [],
-    mcpServers: [mcpServer]
-  });
-
-  return { spotify: spotifyAgent, queue: queueAgent };
-}
-
-// Queue monitoring service
-class QueueMonitorService {
-  private isActive = false;
-  private monitorInterval: NodeJS.Timeout | null = null;
-  private ui: UIManager;
-  private historyTracker: SongHistoryTracker;
-
-  constructor(ui: UIManager, _conversation: ConversationSession) {
-    this.ui = ui;
-    this.historyTracker = new SongHistoryTracker();
-  }
-
-  start(): void {
-    if (this.isActive) return;
-    
-    this.isActive = true;
-    this.ui.showInfo(SUCCESS_MESSAGES.AUTO_QUEUE_STARTED);
-    
-    // Add 4 songs immediately when starting
-    this.checkQueueStatus();
-    
-    // Check at regular intervals for queue status
-    this.monitorInterval = setInterval(() => {
-      this.checkQueueStatus();
-    }, AUTO_QUEUE.INTERVAL_MS);
-  }
-
-  stop(): void {
-    if (!this.isActive) return;
-    
-    this.isActive = false;
-    if (this.monitorInterval) {
-      clearInterval(this.monitorInterval);
-      this.monitorInterval = null;
-    }
-    this.ui.showInfo(SUCCESS_MESSAGES.AUTO_QUEUE_STOPPED);
-  }
-
-  private async checkQueueStatus(): Promise<void> {
-    if (!this.isActive || !agents) return;
-
-    try {
-      // Generate random offset and set limit for better selection
-      const randomOffset = Math.floor(Math.random() * (AUTO_QUEUE.MAX_RANDOM_OFFSET + 1));
-      const limit = AUTO_QUEUE.FETCH_LIMIT;
-
-      // Get recent tracks to avoid repetition
-      const avoidList = this.historyTracker.getAvoidList();
-      const avoidInstruction = avoidList ? ` 3. Try to avoid these recently played tracks if possible: ${avoidList}` : '';
-
-      // Get a random song from liked songs and add to queue
-      const result = await run(agents.spotify, `Please follow these steps: 1. Get tracks from my "Liked Songs" playlist using limit=${limit} and offset=${randomOffset} 2. Pick ${AUTO_QUEUE.SONGS_PER_BATCH} different random songs from those ${limit} tracks (ensure no duplicates in your selection)${avoidInstruction} 4. Add those ${AUTO_QUEUE.SONGS_PER_BATCH} songs to the current playback queue using the addToQueue tool 5. Respond with just the song names and artists that were added`, { maxTurns: AUTO_QUEUE.MAX_TURNS_PRIMARY });
-      
-      // Parse and add tracks to history
-      if (result.finalOutput) {
-        const newTracks = this.historyTracker.parseTracksFromResponse(result.finalOutput);
-        if (newTracks.length > 0) {
-          this.historyTracker.addTracks(newTracks);
-        }
-        
-        this.ui.showInfo(`🎵 ANA-LOG AUTO: ${result.finalOutput}`);
-      }
-    } catch (error) {
-      // Handle MaxTurnsExceededError with fallback approach
-      if (error instanceof Error && error.message.includes(ERROR_MESSAGES.MAX_TURNS_EXCEEDED)) {
-        debug.log('🔍 [AUTO-QUEUE] Max turns exceeded, trying fallback approach...');
-        
-        try {
-          // Fallback: simpler approach with no avoid list
-          const fallbackResult = await run(agents.spotify, `Add ${AUTO_QUEUE.SONGS_PER_BATCH} random songs from my "Liked Songs" playlist to the current playback queue using the addToQueue tool. Respond with just the song names and artists that were added.`, { maxTurns: AUTO_QUEUE.MAX_TURNS_FALLBACK });
-          
-          if (fallbackResult.finalOutput) {
-            const newTracks = this.historyTracker.parseTracksFromResponse(fallbackResult.finalOutput);
-            if (newTracks.length > 0) {
-              this.historyTracker.addTracks(newTracks);
-            }
-            this.ui.showInfo(`🎵 ANA-LOG AUTO: ${fallbackResult.finalOutput}`);
-          }
-        } catch (fallbackError) {
-          console.error('Fallback queue addition also failed:', fallbackError);
-          this.ui.showWarning(ERROR_MESSAGES.QUEUE_MONITOR_FAILED);
-        }
-      } else {
-        // Silently handle other errors to avoid disrupting the user experience
-        console.error('Queue monitor error:', error);
-      }
-    }
-  }
-
-  isRunning(): boolean {
-    return this.isActive;
-  }
-
-  showSongHistory(): void {
-    const recentTracks = this.historyTracker.getRecentTracks();
-    if (recentTracks.length === 0) {
-      this.ui.showInfo('🎵 Song history is empty');
-      return;
-    }
-
-    this.ui.showInfo(`🎵 Recent song history (last ${SONG_HISTORY.MAX_SIZE} tracks):`);
-    recentTracks.forEach((track, index) => {
-      const timeAgo = this.formatTimeAgo(track.timestamp);
-      this.ui.showInfo(`${index + 1}. **"${track.name}"** by **${track.artist}** (${timeAgo})`);
-    });
-  }
-
-  clearSongHistory(): void {
-    this.historyTracker.clearHistory();
-    this.ui.showInfo(SUCCESS_MESSAGES.HISTORY_CLEARED);
-  }
-
-  private formatTimeAgo(timestamp: Date): string {
-    const now = new Date();
-    const diffMs = now.getTime() - timestamp.getTime();
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    
-    if (diffMins < 1) return 'just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays}d ago`;
-  }
-}
-
+/**
+ * Main ChatBot class that orchestrates the Spotify agent interface
+ * 
+ * This class handles user interaction, command parsing, and coordination
+ * between the conversation session, queue monitor, and agent system.
+ */
 class ChatBot {
   private rl: readline.Interface;
   private ui: UIManager;
   private conversation: ConversationSession;
   private queueMonitor: QueueMonitorService;
+  private commandParser: NaturalLanguageCommandParser;
 
   constructor() {
     this.ui = new UIManager();
     this.conversation = new ConversationSession();
     this.queueMonitor = new QueueMonitorService(this.ui, this.conversation);
+    this.commandParser = new NaturalLanguageCommandParser();
     this.rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
@@ -365,20 +41,98 @@ class ChatBot {
     });
   }
   
-  async cleanup() {
-    this.queueMonitor.stop();
-    this.ui.cleanup();
-    if (mcpServer) {
-      try {
-        await mcpServer.close();
-        this.ui.showInfo('MCP server connection closed');
-      } catch (error) {
-        this.ui.showError('Error closing MCP server', error instanceof Error ? error.message : String(error));
-      }
+  /**
+   * Execute a system command (slash command)
+   * @param command - The command to execute
+   * @returns True if command was handled, false otherwise
+   */
+  async executeSystemCommand(command: string): Promise<boolean> {
+    const cmd = command.toLowerCase();
+    
+    switch (cmd) {
+      case '/help':
+        this.ui.showHelp();
+        return true;
+        
+      case '/clear':
+        this.conversation.clearHistory();
+        this.ui.showInfo('Conversation history cleared. Starting fresh conversation.');
+        return true;
+        
+      case '/history':
+        const count = this.conversation.getMessageCount();
+        this.ui.showInfo(`Conversation has ${count} messages in history.`);
+        return true;
+        
+      case '/agents':
+        this.ui.showInfo('Multi-agent system status:');
+        this.ui.showInfo('🎵 Spotify Assistant: Handles user interaction and music control');
+        this.ui.showInfo('🎯 Queue Manager: Specializes in music curation and recommendations');
+        this.ui.showInfo('💬 Communication: Agents coordinate via handoffs for seamless experience');
+        this.ui.showInfo(`🤖 Auto-queue monitor: ${this.queueMonitor.isRunning() ? 'ACTIVE' : 'INACTIVE'}`);
+        return true;
+        
+      case '/start-queue':
+      case '/auto-queue':
+        if (!agents) {
+          this.ui.showError('Agents not initialized', 'Please wait for the system to connect');
+          return true;
+        }
+        this.queueMonitor.start(agents);
+        return true;
+        
+      case '/stop-queue':
+        this.queueMonitor.stop();
+        return true;
+        
+      case '/history-songs':
+        this.queueMonitor.showSongHistory();
+        return true;
+        
+      case '/clear-history-songs':
+        this.queueMonitor.clearSongHistory();
+        return true;
+        
+      case '/pool-stats':
+        if (!agents) {
+          this.ui.showError('Agents not initialized', 'Please wait for the system to connect');
+          return true;
+        }
+        this.queueMonitor.showPoolStats(agents);
+        return true;
+        
+      case '/refresh-pool':
+        if (!agents) {
+          this.ui.showError('Agents not initialized', 'Please wait for the system to connect');
+          return true;
+        }
+        await this.queueMonitor.refreshSongPool(agents);
+        return true;
+        
+      default:
+        return false;
     }
   }
 
-  async start() {
+  /**
+   * Clean up resources when shutting down
+   */
+  async cleanup(): Promise<void> {
+    this.queueMonitor.stop();
+    this.ui.cleanup();
+    
+    try {
+      await cleanupMCPServer();
+      this.ui.showInfo('MCP server connection closed');
+    } catch (error) {
+      this.ui.showError('Error closing MCP server', error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  /**
+   * Start the ChatBot interface and initialize the agent system
+   */
+  async start(): Promise<void> {
     // Initialize rich CLI interface
     this.ui.clearConsole();
     this.ui.showBanner();
@@ -396,109 +150,17 @@ class ChatBot {
       process.exit(1);
     }
     
+    this.setupInputHandlers();
     this.rl.prompt();
-    
+  }
+
+  /**
+   * Set up readline input handlers for user interaction
+   * @private
+   */
+  private setupInputHandlers(): void {
     this.rl.on('line', async (input: string) => {
-      const userInput = input.trim();
-      
-      if (userInput.toLowerCase() === 'exit') {
-        this.ui.showGoodbye();
-        await this.cleanup();
-        this.rl.close();
-        process.exit(0);
-      }
-      
-      if (userInput === '') {
-        this.rl.prompt();
-        return;
-      }
-      
-      // Handle special commands
-      if (userInput.toLowerCase() === '/help') {
-        this.ui.showHelp();
-        this.rl.prompt();
-        return;
-      }
-      
-      if (userInput.toLowerCase() === '/clear') {
-        this.conversation.clearHistory();
-        this.ui.showInfo(`Conversation history cleared. Starting fresh conversation.`);
-        this.rl.prompt();
-        return;
-      }
-      
-      if (userInput.toLowerCase() === '/history') {
-        const count = this.conversation.getMessageCount();
-        this.ui.showInfo(`Conversation has ${count} messages in history.`);
-        this.rl.prompt();
-        return;
-      }
-      
-      if (userInput.toLowerCase() === '/agents') {
-        this.ui.showInfo('Multi-agent system status:');
-        this.ui.showInfo('🎵 Spotify Assistant: Handles user interaction and music control');
-        this.ui.showInfo('🎯 Queue Manager: Specializes in music curation and recommendations');
-        this.ui.showInfo('💬 Communication: Agents coordinate via handoffs for seamless experience');
-        this.ui.showInfo(`🤖 Auto-queue monitor: ${this.queueMonitor.isRunning() ? 'ACTIVE' : 'INACTIVE'}`);
-        this.rl.prompt();
-        return;
-      }
-      
-      if (userInput.toLowerCase() === '/start-queue' || userInput.toLowerCase() === '/auto-queue') {
-        this.queueMonitor.start();
-        this.rl.prompt();
-        return;
-      }
-      
-      if (userInput.toLowerCase() === '/stop-queue') {
-        this.queueMonitor.stop();
-        this.rl.prompt();
-        return;
-      }
-      
-      if (userInput.toLowerCase() === '/history-songs') {
-        this.queueMonitor.showSongHistory();
-        this.rl.prompt();
-        return;
-      }
-      
-      if (userInput.toLowerCase() === '/clear-history-songs') {
-        this.queueMonitor.clearSongHistory();
-        this.rl.prompt();
-        return;
-      }
-      
-      try {
-        this.ui.startSpinner('Processing your request...');
-        
-        // Add user message to conversation history
-        this.conversation.addUserMessage(userInput);
-        
-        // Create input with conversation context
-        const contextualInput = this.conversation.getFormattedHistory() + ' ' + userInput;
-        
-        // Use the Spotify agent for all user interactions
-        const result = await run(agents!.spotify, contextualInput);
-        this.ui.stopSpinner();
-        
-        const response = result.finalOutput || 'No response received';
-        
-        // Add assistant response to conversation history
-        this.conversation.addAssistantMessage(response);
-        
-        console.log(this.ui.formatBotResponse(response) + '\n');
-      } catch (error) {
-        // Ensure spinner is stopped even on error
-        this.ui.stopSpinner();
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        this.ui.showError('Something went wrong', errorMessage);
-        if (error instanceof Error && error.stack) {
-          console.log(this.ui.formatBotResponse('Stack trace: ' + error.stack));
-        }
-        console.log('');
-      }
-      
-      this.rl.prompt();
+      await this.handleUserInput(input.trim());
     });
     
     this.rl.on('close', async () => {
@@ -507,9 +169,114 @@ class ChatBot {
       process.exit(0);
     });
   }
+
+  /**
+   * Handle user input and route to appropriate handlers
+   * @param userInput - The trimmed user input
+   * @private
+   */
+  private async handleUserInput(userInput: string): Promise<void> {
+    // Handle exit command
+    if (userInput.toLowerCase() === 'exit') {
+      this.ui.showGoodbye();
+      await this.cleanup();
+      this.rl.close();
+      process.exit(0);
+    }
+    
+    // Handle empty input
+    if (userInput === '') {
+      this.rl.prompt();
+      return;
+    }
+    
+    // Handle system commands (both slash commands and natural language)
+    const commandToExecute = this.parseCommand(userInput);
+    
+    // Execute system command if it's a slash command
+    if (commandToExecute.startsWith('/')) {
+      const wasHandled = await this.executeSystemCommand(commandToExecute);
+      if (wasHandled) {
+        this.rl.prompt();
+        return;
+      }
+    }
+    
+    // Handle regular chat interaction
+    await this.handleChatInteraction(userInput);
+    this.rl.prompt();
+  }
+
+  /**
+   * Parse user input to detect system commands
+   * @param userInput - The user input to parse
+   * @returns The command to execute (may be modified from original input)
+   * @private
+   */
+  private parseCommand(userInput: string): string {
+    // Check if it's already a slash command
+    if (userInput.startsWith('/')) {
+      return userInput;
+    }
+    
+    // Check if it's a natural language command
+    const detectedCommand = this.commandParser.parseCommand(userInput);
+    if (detectedCommand) {
+      this.ui.showInfo(`🤖 Detected command: ${detectedCommand}`);
+      return detectedCommand;
+    }
+    
+    return userInput;
+  }
+
+  /**
+   * Handle regular chat interaction with the Spotify agent
+   * @param userInput - The user input to process
+   * @private
+   */
+  private async handleChatInteraction(userInput: string): Promise<void> {
+    if (!agents) {
+      this.ui.showError('Agents not initialized', 'Please wait for the system to connect');
+      return;
+    }
+
+    try {
+      this.ui.startSpinner('Processing your request...');
+      
+      // Add user message to conversation history
+      this.conversation.addUserMessage(userInput);
+      
+      // Create input with conversation context
+      const contextualInput = this.conversation.getFormattedHistory() + ' ' + userInput;
+      
+      // Use the Spotify agent for all user interactions
+      const result = await run(agents.spotify, contextualInput);
+      this.ui.stopSpinner();
+      
+      const response = result.finalOutput || 'No response received';
+      
+      // Add assistant response to conversation history
+      this.conversation.addAssistantMessage(response);
+      
+      console.log(this.ui.formatBotResponse(response) + '\n');
+    } catch (error) {
+      this.ui.stopSpinner();
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.ui.showError('Something went wrong', errorMessage);
+      if (error instanceof Error && error.stack) {
+        console.log(this.ui.formatBotResponse('Stack trace: ' + error.stack));
+      }
+      console.log('');
+    }
+  }
 }
 
-async function main() {
+/**
+ * Main entry point for the Spotify Agent CLI
+ * 
+ * Performs environment validation and starts the ChatBot interface
+ */
+async function main(): Promise<void> {
   const ui = new UIManager();
   
   // Show debug status if enabled
@@ -517,6 +284,7 @@ async function main() {
     ui.showInfo(SUCCESS_MESSAGES.DEBUG_ENABLED);
   }
   
+  // Validate required environment variables
   if (!process.env.OPENAI_API_KEY) {
     ui.showError('Missing OpenAI API key', ERROR_MESSAGES.MISSING_OPENAI_KEY);
     console.log('   Example: export OPENAI_API_KEY=sk-your-key-here');
@@ -533,4 +301,5 @@ async function main() {
   await chatBot.start();
 }
 
+// Start the application
 main().catch(console.error);

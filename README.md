@@ -8,7 +8,7 @@
 
 ## 🎯 What This Project Demonstrates
 
-This project showcases advanced **AI/ML engineering skills** through a practical, working application that recruiters can actually try. It demonstrates:
+This project showcases intermediate **AI/ML engineering skills** through a practical, working application that you can actually try. It demonstrates:
 
 - **Modern AI Agent Architecture** with OpenAI's Agents SDK
 - **Advanced Prompt Engineering** with context-aware interactions
@@ -17,7 +17,7 @@ This project showcases advanced **AI/ML engineering skills** through a practical
 - **CLI/UX Design** with rich terminal interfaces
 - **System Integration** using emerging MCP protocol
 
-## 🚀 Try It Yourself (Recruiters!)
+## 🚀 Try It Yourself
 
 > **Want to see this in action?** Follow the setup below - it takes 5 minutes and you'll be controlling Spotify with natural language!
 
@@ -51,7 +51,7 @@ This project showcases advanced **AI/ML engineering skills** through a practical
 
 4. **Start the Agent**
    ```bash
-   npm run dev
+   npm run build && npm run start
    ```
 
 ### What You'll Experience
@@ -73,26 +73,6 @@ This project showcases advanced **AI/ML engineering skills** through a practical
 ```
 
 ## 🛠️ Technical Architecture
-
-### Core Innovation: Intelligent Auto-Queue System
-
-The standout feature demonstrates sophisticated AI engineering:
-
-```typescript
-// Intelligent song selection with anti-repetition
-const avoidList = historyTracker.getAvoidList(); // Last 12 songs
-const prompt = `
-1. Get tracks from "Liked Songs" using limit=${limit} and offset=${randomOffset}
-2. Pick 4 random songs avoiding: ${avoidList}
-3. Add to queue using addToQueue tool
-4. Respond with song names and artists
-`;
-
-const result = await run(spotifyAgent, prompt, { 
-  maxTurns: 15,
-  fallback: simplifiedApproach 
-});
-```
 
 ### Technology Stack
 
@@ -224,7 +204,7 @@ npm run clean          # Clean build artifacts
 
 ### Why This Project Stands Out
 
-1. **Real-World Application**: Not just a toy project - this actually works with Spotify
+1. **Real-World Application**: This _actually_ works with Spotify
 2. **Try-It-Yourself**: You can run it and see the AI in action
 3. **Modern Tech Stack**: Uses cutting-edge AI tools and protocols
 4. **Production Quality**: Enterprise-grade code patterns and practices
@@ -238,36 +218,6 @@ npm run clean          # Clean build artifacts
 - **Developer Experience**: Rich CLI interfaces, debugging tools, documentation
 - **Innovation**: Early adoption of emerging technologies (MCP, AI Agents)
 
-### Code Quality Highlights
-
-- **100% TypeScript**: Strict typing with comprehensive error handling
-- **Modular Design**: Clean separation of concerns across multiple files
-- **Documentation**: JSDoc comments and comprehensive README
-- **Testing Ready**: Structure supports unit and integration tests
-- **Performance**: Efficient algorithms and memory management
-
-## 📊 Performance & Reliability
-
-- **Startup Time**: < 3 seconds with MCP server connection
-- **Response Latency**: 1-2 seconds for typical commands
-- **Memory Usage**: ~50MB baseline with efficient garbage collection
-- **Error Recovery**: Automatic fallback systems for reliability
-- **Rate Limiting**: Intelligent throttling for API compliance
-
-## 🔮 Future Enhancements
-
-- [ ] Voice command integration
-- [ ] Multi-user session management
-- [ ] Advanced playlist algorithms
-- [ ] Real-time collaboration features
-- [ ] Web interface companion
-
 ---
-
-## 📞 Contact
-
-**Want to discuss this project or explore opportunities?**
-
-This project represents my approach to modern AI/ML engineering - combining cutting-edge technology with practical, user-focused solutions. I'm excited to discuss how these skills can contribute to your team's success.
 
 *Built with ❤️ and modern AI engineering practices*

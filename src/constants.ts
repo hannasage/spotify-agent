@@ -18,6 +18,24 @@ export const AUTO_QUEUE = {
   MAX_TURNS_FALLBACK: 8,
 } as const;
 
+// Song pool configuration
+export const SONG_POOL = {
+  /** Number of songs to fetch per pool refresh */
+  FETCH_SIZE: 100,
+  /** Maximum random offset for fetching songs */
+  MAX_RANDOM_OFFSET: 500,
+  /** Maximum turns allowed for pool refresh */
+  MAX_TURNS: 8,
+  /** Pool refresh interval (30 minutes) */
+  REFRESH_INTERVAL_MS: 1800000,
+  /** Minimum time between pool refreshes (prevents rapid refreshes) */
+  MIN_REFRESH_INTERVAL_MS: 300000,
+  /** Maximum number of played songs to remember */
+  MAX_PLAYED_HISTORY: 50,
+  /** Target songs to use from each pool before refresh */
+  TARGET_SONGS_PER_POOL: 20,
+} as const;
+
 // Song history configuration
 export const SONG_HISTORY = {
   /** Maximum number of songs to track in history */
