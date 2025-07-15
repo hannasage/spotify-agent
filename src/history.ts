@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { debug } from './debug';
 
 export interface HistoryTrack {
   name: string;
@@ -9,7 +10,7 @@ export interface HistoryTrack {
 
 export class SongHistoryTracker {
   private history: HistoryTrack[] = [];
-  private readonly maxSize = 24;
+  private readonly maxSize = 12;
   private readonly historyFile = path.join(process.cwd(), 'song-history.json');
 
   constructor() {
@@ -47,7 +48,7 @@ export class SongHistoryTracker {
       .map(track => `"${track.name}" by ${track.artist}`)
       .join(', ');
     
-    console.log(`🔍 [HISTORY DEBUG] Avoiding ${this.history.length} tracks: ${avoidList}`);
+    debug.log(`🔍 [HISTORY DEBUG] Avoiding ${this.history.length} tracks: ${avoidList}`);
     
     return avoidList;
   }
@@ -94,8 +95,8 @@ export class SongHistoryTracker {
       }
     }
     
-    console.log(`🔍 [HISTORY DEBUG] Parsed ${tracks.length} tracks from response:`, tracks.map(t => `"${t.name}" by ${t.artist}`));
-    console.log(`🔍 [HISTORY DEBUG] Raw response text:`, response);
+    debug.log(`🔍 [HISTORY DEBUG] Parsed ${tracks.length} tracks from response:`, tracks.map(t => `"${t.name}" by ${t.artist}`));
+    debug.log(`🔍 [HISTORY DEBUG] Raw response text:`, response);
     
     return tracks;
   }

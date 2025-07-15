@@ -252,7 +252,7 @@ export class UIManager {
       chalk.white('  /agents') + chalk.gray('                 - Show multi-agent system status'),
       chalk.white('  /auto-queue') + chalk.gray('              - Start automatic queue management'),
       chalk.white('  /stop-queue') + chalk.gray('              - Stop automatic queue management'),
-      chalk.white('  /history-songs') + chalk.gray('            - Show recent song history (last 24)'),
+      chalk.white('  /history-songs') + chalk.gray('            - Show recent song history (last 12)'),
       chalk.white('  /clear-history-songs') + chalk.gray('       - Clear song history'),
       chalk.white('  exit') + chalk.gray('                    - Quit the application'),
       '',

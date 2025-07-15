@@ -4,6 +4,7 @@ import * as dotenv from 'dotenv';
 import { z } from 'zod';
 import { UIManager } from './ui';
 import { SongHistoryTracker } from './history';
+import { debug } from './debug';
 
 dotenv.config();
 
@@ -311,7 +312,7 @@ class QueueMonitorService {
     } catch (error) {
       // Handle MaxTurnsExceededError with fallback approach
       if (error instanceof Error && error.message.includes('Max turns')) {
-        console.log('🔍 [AUTO-QUEUE] Max turns exceeded, trying fallback approach...');
+        debug.log('🔍 [AUTO-QUEUE] Max turns exceeded, trying fallback approach...');
         
         try {
           // Fallback: simpler approach with no avoid list
@@ -346,7 +347,7 @@ class QueueMonitorService {
       return;
     }
 
-    this.ui.showInfo('🎵 Recent song history (last 24 tracks):');
+    this.ui.showInfo('🎵 Recent song history (last 12 tracks):');
     recentTracks.forEach((track, index) => {
       const timeAgo = this.formatTimeAgo(track.timestamp);
       this.ui.showInfo(`${index + 1}. **"${track.name}"** by **${track.artist}** (${timeAgo})`);
@@ -537,6 +538,11 @@ class ChatBot {
 
 async function main() {
   const ui = new UIManager();
+  
+  // Show debug status if enabled
+  if (debug.isDebugEnabled()) {
+    ui.showInfo('🔍 Debug mode enabled');
+  }
   
   if (!process.env.OPENAI_API_KEY) {
     ui.showError('Missing OpenAI API key', 'Please set your OPENAI_API_KEY environment variable');

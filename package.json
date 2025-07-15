@@ -5,6 +5,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "npm run auth;ts-node src/index.ts",
+    "debug": "npm run auth;ts-node src/index.ts -d",
     "start": "npm run auth;node dist/index.js",
     "auth": "cd ../spotify-mcp-server; npm run auth; npm run build; cd ../spotify-agent",
     "test": "echo \"Error: no test specified\" && exit 1"
