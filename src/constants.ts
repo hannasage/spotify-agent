@@ -5,7 +5,7 @@
 // Auto-queue system configuration
 export const AUTO_QUEUE = {
   /** Number of songs to add per auto-queue cycle */
-  SONGS_PER_BATCH: 4,
+  SONGS_PER_BATCH: 3,
   /** Interval between auto-queue cycles in milliseconds (10 minutes) */
   INTERVAL_MS: 600000,
   /** Maximum number of songs to fetch from Spotify for random selection 
