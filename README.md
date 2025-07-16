@@ -169,4 +169,4 @@ ISC License - see [LICENSE](LICENSE) file for details.
 - Spotify integration via [spotify-mcp-server](https://github.com/marcelmarais/spotify-mcp-server)
 
 ---
-_Made with ❤️ and modern AI development practices_
+_Made with_ ❤️ _and modern AI development practices_
