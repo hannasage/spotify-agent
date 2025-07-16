@@ -12,7 +12,7 @@ export const AUTO_QUEUE = {
     * (Spotify API limit is 50) */
   FETCH_LIMIT: 50,
   /** Maximum random offset for song selection */
-  MAX_RANDOM_OFFSET: 400,
+  MAX_RANDOM_OFFSET: 700,
   /** Maximum turns for primary agent attempt */
   MAX_TURNS_PRIMARY: 15,
   /** Maximum turns for fallback agent attempt */
