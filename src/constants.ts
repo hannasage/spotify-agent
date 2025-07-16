@@ -8,7 +8,8 @@ export const AUTO_QUEUE = {
   SONGS_PER_BATCH: 4,
   /** Interval between auto-queue cycles in milliseconds (10 minutes) */
   INTERVAL_MS: 600000,
-  /** Maximum number of songs to fetch from Spotify for random selection */
+  /** Maximum number of songs to fetch from Spotify for random selection 
+    * (Spotify API limit is 50) */
   FETCH_LIMIT: 50,
   /** Maximum random offset for song selection */
   MAX_RANDOM_OFFSET: 400,
