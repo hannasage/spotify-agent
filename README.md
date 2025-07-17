@@ -52,7 +52,7 @@ All system commands can also be triggered using natural language:
 ```bash
 mkdir spotify-ai && cd spotify-ai
 git clone https://github.com/hannasage/spotify-mcp-server.git
-git clone [your-repo] spotify-agent
+git clone https://github.com/hannasage/spotify-agent.git
 ```
 
 2. **Setup the Spotify MCP Server**
