@@ -1,6 +1,6 @@
 # Spotify Agent
 
-An AI-powered Spotify control agent that provides intelligent music queue management and natural language interaction with your Spotify account.
+An intelligent hierarchical multi-agent system that provides advanced Spotify control through specialized AI agents working in concert to deliver seamless music experiences.
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8.3-blue.svg)](https://www.typescriptlang.org/)
 [![OpenAI Agents](https://img.shields.io/badge/OpenAI%20Agents-0.0.11-green.svg)](https://github.com/openai/agents)
@@ -8,25 +8,35 @@ An AI-powered Spotify control agent that provides intelligent music queue manage
 
 ## Features
 
+### 🎭 **Hierarchical Multi-Agent System**
+Four specialized AI agents work together under an intelligent orchestrator:
+- **🎮 Playback Agent**: Real-time playback control and device management
+- **🔍 Search Agent**: Content discovery with clarifying questions for ambiguous requests
+- **📚 Library Agent**: Personal music collection and playlist management
+- **🎯 Queue Agent**: Smart music curation and management
+
 ### 💬 **Natural Language Control**
 ```bash
 🎧 You: start auto queue please
-🤖 Agent: Auto-queue started! Adding 4 songs every 10 minutes.
+🤖 Orchestrator: Auto-queue started! Adding 4 songs every 10 minutes.
 
-🎧 You: queue something by radiohead
-🤖 Agent: I'll search for Radiohead and add it to your queue...
+🎧 You: do i have any kendrick in my library?
+🤖 Search Agent: I found several Kendrick Lamar albums in your library...
+🤖 Library Agent: You have 23 Kendrick Lamar tracks saved, including "HUMBLE." and "DNA."
 
 🎧 You: what's playing?
-🤖 Agent: Currently playing "Everything In Its Right Place" by Radiohead
+🤖 Playback Agent: Currently playing "Everything In Its Right Place" by Radiohead
 ```
 
 ### 🎵 **Auto-Queue**
-- **Pool Management**: Fetches 50 songs from your library, uses 20, refreshes every 30 minutes
-- **Anti-Repetition**: Remembers your last 12 tracks to avoid musical déjà vu
+- **Smart Pool Management**: Queue Agent fetches 50 songs from your library, uses 20, refreshes every 30 minutes
+- **Anti-Repetition**: Remembers your last 12 tracks to avoid musical déjà vu  
 - **Seamless Experience**: Adds 4 songs every 10 minutes for continuous playback
+- **Multi-Agent Coordination**: Search Agent discovers content, Library Agent verifies availability, Queue Agent curates flow
 
-### 🛠️ **System Commands**
-- `/help` - Show available commands
+### 🛠️ **Unified Command System**
+- `/help` - Show available commands and agent status
+- `/agents` - View multi-agent system status
 - `/auto-queue` - Start intelligent queue monitoring
 - `/stop-queue` - Stop auto-queue
 - `/pool-stats` - View song pool statistics
@@ -34,7 +44,10 @@ An AI-powered Spotify control agent that provides intelligent music queue manage
 - `/refresh-pool` - Force refresh song pool
 
 > 🗣️ **Natural Language Commands** —
-All system commands can also be triggered using natural language:
+All system commands work through natural language via the Unified Command Router:
+> - "start auto mode" → `/auto-queue`
+> - "show agent status" → `/agents`
+> - "clear conversation" → `/clear`
 
 
 ## Quick Start
@@ -86,49 +99,70 @@ npm start
 ### First Experience
 ```bash
 🎵 SPOTIFY AGENT
-✅ Multi-agent system ready! Spotify Assistant + Queue Manager + Command Router available.
+✅ Hierarchical multi-agent system ready! Orchestrator + Specialized Agents + Command Router available.
 
 🎧 You: start auto queue
-🎯 Auto-queue monitor started! Will add 4 songs every 10 minutes.
+🤖 Orchestrator: Auto-queue started! Adding 4 songs every 10 minutes.
 🎵 ANA-LOG AUTO: Added 4 songs to queue
    • "Paranoid Android" by Radiohead
    • "Karma Police" by Radiohead  
    • "Creep" by Radiohead
    • "No Surprises" by Radiohead
+
+🎧 You: do i have any pink floyd albums?
+🤖 Search Agent: I found several Pink Floyd albums in your library...
+🤖 Library Agent: You have "The Dark Side of the Moon" and "Wish You Were Here" saved!
 ```
 
 ## Architecture
 
-### Multi-Agent System
-- **Spotify Assistant**: Primary agent handling user interaction and music control
-- **Queue Manager**: Specialized agent for intelligent music curation and queue management
-- **Command Router**: Routes natural language to appropriate tools and agents
+### Hierarchical Multi-Agent System
+The system uses a sophisticated orchestrator pattern with specialized agents:
 
-### Key Components
-- **Song Pool Manager**: Intelligent song selection from your library
-- **Queue Monitor**: Autonomous queue management with anti-repetition
-- **History Tracker**: Persistent track history to avoid repetition
-- **Tool Registry**: Modular system for extending functionality
+```
+User Input → Unified Command Router → System Commands OR Music Commands → Spotify Orchestrator → Specialized Agents
+```
+
+- **🎵 Spotify Orchestrator**: Central coordinator that analyzes requests and routes to appropriate agents
+- **🎮 Playback Agent**: Handles real-time playback control, device management, and volume control
+- **🔍 Search Agent**: Specializes in content discovery, search queries, and clarifying ambiguous requests
+- **📚 Library Agent**: Manages personal music collections, playlists, and saved music operations
+- **🎯 Queue Agent**: "Dumb" music shuffling and **no** recommendation algorithms
+- **🔀 Unified Command Router**: Clean routing system supporting slash commands and natural language
+
+### Multi-Agent Coordination
+- **Task Analysis**: Orchestrator determines which agent(s) to use based on request complexity
+- **Agent Handoffs**: Seamless coordination between agents for complex workflows
+- **Search → Library Workflows**: Search Agent finds content, Library Agent verifies availability
+- **Clarification Support**: Interactive clarification for ambiguous requests with conversation context
+- **Result Synthesis**: Orchestrator combines results from multiple agents into coherent responses
 
 ### Technology Stack
-- **OpenAI Agents SDK**: Multi-agent orchestration
-- **Model Context Protocol (MCP)**: AI-to-API communication
-- **TypeScript**: Type-safe development
-- **Spotify Web API**: Music control and library access
+- **OpenAI Agents SDK**: Multi-agent orchestration and coordination
+- **Model Context Protocol (MCP)**: AI-to-API communication layer
+- **TypeScript**: Type-safe development with strict optional properties
+- **Spotify Web API**: Music control and library access via MCP server
 
 ## Development
 
 ### Project Structure
 ```
 src/
+├── orchestrator/      # Hierarchical orchestrator system
+│   ├── SpotifyOrchestrator.ts  # Central coordinator
+│   └── types.ts       # Orchestrator type definitions
+├── routing/           # Unified command routing
+│   └── UnifiedCommandRouter.ts
+├── prompts/           # Specialized agent prompts
+│   ├── spotify-orchestrator.md
+│   ├── playback-agent.md
+│   ├── search-agent.md
+│   ├── library-agent.md
+│   └── queue-manager.md
 ├── agents.ts          # Multi-agent configuration
 ├── queueMonitor.ts    # Auto-queue management
-├── songPool.ts        # Intelligent song selection
-├── tools/             # Modular tool system
-│   ├── autoQueueTools.ts
-│   ├── poolTools.ts
-│   ├── historyTools.ts
-│   └── systemTools.ts
+├── songPool.ts        # Song selection
+├── tools/             # Legacy tool system (orchestrator-compatible)
 ├── ui.ts              # Rich CLI interface
 └── types.ts           # TypeScript definitions
 ```
@@ -142,21 +176,29 @@ npm start              # Production mode
 npm run clean          # Clean build artifacts
 ```
 
-### Adding New Tools
-1. Create a new tool class extending `BaseTool`
-2. Register it in `src/tools/registry.ts`
-3. Add appropriate agent instructions
+### Adding New Agents
+1. Create a new agent prompt in `src/prompts/`
+2. Add agent configuration to `SpotifyAgentConfig` in `src/orchestrator/types.ts`
+3. Update orchestrator initialization in `src/agents.ts`
+4. Add task analysis logic in `SpotifyOrchestrator.ts`
+
+### Extending Agent Capabilities
+1. Modify existing agent prompts to add new capabilities
+2. Update task analysis logic to route appropriate requests
+3. Add multi-agent coordination workflows for complex tasks
 
 ## Contributing
 
 We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
 
 ### Areas for Contribution
-- Enhanced recommendation algorithms
-- Additional music service integrations
-- Web interface development
-- Mobile app development
-- Playlist generation features
+- **Agent Specialization**: New specialized agents for specific music tasks
+- **Multi-Agent Workflows**: Enhanced coordination patterns between agents
+- **Recommendation Algorithms**: Advanced music curation and discovery
+- **Additional Integrations**: Other music service support (Apple Music, YouTube Music)
+- **Web Interface**: Browser-based interface for the multi-agent system
+- **Mobile App**: Native mobile app with agent coordination
+- **Voice Interface**: Voice control integration with agent orchestration
 
 ## License
 
@@ -164,9 +206,10 @@ ISC License - see [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-- Built with [OpenAI Agents](https://github.com/openai/agents)
+- Built with [OpenAI Agents](https://github.com/openai/agents) for multi-agent orchestration
 - Uses [Model Context Protocol](https://modelcontextprotocol.io/) for AI-to-API communication
 - Spotify integration via [spotify-mcp-server](https://github.com/marcelmarais/spotify-mcp-server)
+- Inspired by hierarchical agent systems like Microsoft's Magentic-One and AWS Multi-Agent Orchestrator
 
 ---
-_Made with_ ❤️ _and modern AI development practices_
+_Made with_ ❤️ _and cutting-edge multi-agent AI architecture_
