@@ -75,8 +75,8 @@ class ChatBot {
         
       case '/agents':
         this.ui.showInfo('Multi-agent system status:');
-        this.ui.showInfo('🎵 Spotify Assistant: Handles user interaction and music control');
-        this.ui.showInfo('🎯 Queue Manager: Specializes in music curation and recommendations');
+        this.ui.showInfo('🎵 Playback Agent: Handles music playback actions and queue management');
+        this.ui.showInfo('🔍 Lookup Agent: Specializes in music information retrieval and search');
         this.ui.showInfo('💬 Communication: Agents coordinate via handoffs for seamless experience');
         this.ui.showInfo(`🤖 Auto-queue monitor: ${this.queueMonitor.isRunning() ? 'ACTIVE' : 'INACTIVE'}`);
         return true;
@@ -161,7 +161,7 @@ class ChatBot {
       
       this.ui.showConnectionStatus('connected');
       this.ui.showWelcomeInstructions();
-      this.ui.showInfo('🤖 Multi-agent system ready! Spotify Assistant + Queue Manager + Command Router available.');
+      this.ui.showInfo('🤖 Multi-agent system ready! Playback Agent + Lookup Agent + Command Router available.');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.ui.showConnectionStatus('error', errorMessage);
@@ -233,41 +233,47 @@ class ChatBot {
           this.rl.prompt();
           return;
           
-        case 'spotify':
-          // Route to Spotify agent
-          await this.handleSpotifyInteraction(routerResult.content);
+        case 'playback':
+          // Route to Playback agent
+          await this.handlePlaybackInteraction(routerResult.content);
+          this.rl.prompt();
+          return;
+          
+        case 'lookup':
+          // Route to Lookup agent
+          await this.handleLookupInteraction(routerResult.content);
           this.rl.prompt();
           return;
           
         default:
-          // Default to Spotify interaction
-          await this.handleSpotifyInteraction(userInput);
+          // Default to Lookup interaction
+          await this.handleLookupInteraction(userInput);
           this.rl.prompt();
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       debug.log(`❌ [INPUT] Error processing input: ${errorMessage}`);
       
-      // Fallback to Spotify interaction on any error
-      await this.handleSpotifyInteraction(userInput);
+      // Fallback to Lookup interaction on any error
+      await this.handleLookupInteraction(userInput);
       this.rl.prompt();
     }
   }
 
 
   /**
-   * Handle Spotify interaction with the Spotify agent
-   * @param userInput - The user input to process (music-related requests)
+   * Handle Playback interaction with the Playback agent
+   * @param userInput - The user input to process (playback actions)
    * @private
    */
-  private async handleSpotifyInteraction(userInput: string): Promise<void> {
+  private async handlePlaybackInteraction(userInput: string): Promise<void> {
     if (!agents) {
       this.ui.showError('Agents not initialized', 'Please wait for the system to connect');
       return;
     }
 
     try {
-      this.ui.startSpinner('Processing your request...');
+      this.ui.startSpinner('Executing playback action...');
       
       // Add user message to conversation history
       this.conversation.addUserMessage(userInput);
@@ -275,8 +281,8 @@ class ChatBot {
       // Create input with conversation context
       const contextualInput = this.conversation.getFormattedHistory() + ' ' + userInput;
       
-      // Use the Spotify agent for all user interactions
-      const result = await run(agents.spotify, contextualInput);
+      // Use the Playback agent for action requests
+      const result = await run(agents.playback, contextualInput);
       this.ui.stopSpinner();
       
       const response = result.finalOutput || 'No response received';
@@ -288,7 +294,48 @@ class ChatBot {
     } catch (error) {
       this.ui.stopSpinner();
       const errorMessage = error instanceof Error ? error.message : String(error);
-      this.ui.showError('Something went wrong', errorMessage);
+      this.ui.showError('Playback action failed', errorMessage);
+      if (error instanceof Error && error.stack) {
+        console.log(this.ui.formatBotResponse('Stack trace: ' + error.stack));
+      }
+      console.log('');
+    }
+  }
+
+  /**
+   * Handle Lookup interaction with the Lookup agent
+   * @param userInput - The user input to process (information requests)
+   * @private
+   */
+  private async handleLookupInteraction(userInput: string): Promise<void> {
+    if (!agents) {
+      this.ui.showError('Agents not initialized', 'Please wait for the system to connect');
+      return;
+    }
+
+    try {
+      this.ui.startSpinner('Looking up information...');
+      
+      // Add user message to conversation history
+      this.conversation.addUserMessage(userInput);
+      
+      // Create input with conversation context
+      const contextualInput = this.conversation.getFormattedHistory() + ' ' + userInput;
+      
+      // Use the Lookup agent for information requests
+      const result = await run(agents.lookup, contextualInput);
+      this.ui.stopSpinner();
+      
+      const response = result.finalOutput || 'No response received';
+      
+      // Add assistant response to conversation history
+      this.conversation.addAssistantMessage(response);
+      
+      console.log(this.ui.formatBotResponse(response) + '\n');
+    } catch (error) {
+      this.ui.stopSpinner();
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.ui.showError('Information lookup failed', errorMessage);
       if (error instanceof Error && error.stack) {
         console.log(this.ui.formatBotResponse('Stack trace: ' + error.stack));
       }

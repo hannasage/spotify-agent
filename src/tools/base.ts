@@ -31,8 +31,8 @@ export function createErrorResult(message: string, error?: string): ToolResult {
 /**
  * Validate that agents are available in the context
  */
-export function validateAgents(context: SystemContext): ToolResult | null {
-  if (!context.agents) {
+export function validateAgents(agents: import('../types').AgentConfig | null): ToolResult | null {
+  if (!agents) {
     return createErrorResult(
       'System not ready - agents are still initializing. Please wait a moment and try again.'
     );
@@ -52,7 +52,7 @@ export abstract class BaseTool implements SystemTool {
    */
   async execute(context: SystemContext): Promise<ToolResult> {
     try {
-      return await this.executeInternal(context);
+      return await this.executeImpl(context);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`Tool ${this.name} failed:`, errorMessage);
@@ -66,5 +66,5 @@ export abstract class BaseTool implements SystemTool {
   /**
    * Internal execution method to be implemented by subclasses
    */
-  protected abstract executeInternal(context: SystemContext): Promise<ToolResult>;
+  protected abstract executeImpl(context: SystemContext): Promise<ToolResult>;
 }
