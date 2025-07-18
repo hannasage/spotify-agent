@@ -6,8 +6,8 @@ import { ERROR_MESSAGES, SUCCESS_MESSAGES } from './constants';
 import { ConversationSession } from './conversation';
 import { QueueMonitorService } from './queueMonitor';
 import { createSpotifyOrchestrator, cleanupMCPServer } from './agents';
-import { CommandRouter, SystemContext } from './tools';
 import { SpotifyOrchestratorConfig } from './types';
+import { UnifiedCommandRouter } from './routing';
 
 dotenv.config();
 
@@ -26,21 +26,15 @@ class ChatBot {
   private ui: UIManager;
   private conversation: ConversationSession;
   private queueMonitor: QueueMonitorService;
-  private commandRouter: CommandRouter;
+  private router: UnifiedCommandRouter;
 
   constructor() {
     this.ui = new UIManager();
     this.conversation = new ConversationSession();
     this.queueMonitor = new QueueMonitorService(this.ui, this.conversation);
     
-    // Initialize command router with system context
-    const systemContext: SystemContext = {
-      ui: this.ui,
-      conversation: this.conversation,
-      queueMonitor: this.queueMonitor,
-      agents: null // Legacy support for queue monitor
-    };
-    this.commandRouter = new CommandRouter(systemContext);
+    // Initialize unified command router
+    this.router = new UnifiedCommandRouter(this.ui, this.conversation, this.queueMonitor);
     
     this.rl = readline.createInterface({
       input: process.stdin,
@@ -49,107 +43,6 @@ class ChatBot {
     });
   }
   
-  /**
-   * Execute a system command (slash command)
-   * @param command - The command to execute
-   * @returns True if command was handled, false otherwise
-   */
-  async executeSystemCommand(command: string): Promise<boolean> {
-    const cmd = command.toLowerCase();
-    
-    switch (cmd) {
-      case '/help':
-        this.ui.showHelp();
-        return true;
-        
-      case '/clear':
-        this.conversation.clearHistory();
-        this.ui.showInfo('Conversation history cleared. Starting fresh conversation.');
-        return true;
-        
-      case '/history':
-        const count = this.conversation.getMessageCount();
-        this.ui.showInfo(`Conversation has ${count} messages in history.`);
-        return true;
-        
-      case '/agents':
-        if (!orchestratorConfig) {
-          this.ui.showInfo('Hierarchical multi-agent system status:');
-          this.ui.showInfo('🎵 Spotify Orchestrator: Initializing...');
-          this.ui.showInfo('🎮 Playback Agent: Waiting for orchestrator');
-          this.ui.showInfo('🔍 Search Agent: Waiting for orchestrator');
-          this.ui.showInfo('📚 Library Agent: Waiting for orchestrator');
-          this.ui.showInfo('🎯 Queue Agent: Waiting for orchestrator');
-          this.ui.showInfo('💬 Communication: System is starting up');
-          this.ui.showInfo(`🤖 Auto-queue monitor: ${this.queueMonitor.isRunning() ? 'ACTIVE' : 'INACTIVE'}`);
-        } else {
-          this.ui.showInfo('Hierarchical multi-agent system status:');
-          this.ui.showInfo('🎵 Spotify Orchestrator: Coordinates specialized agents for optimal performance');
-          this.ui.showInfo('🎮 Playback Agent: Handles real-time playback control and device management');
-          this.ui.showInfo('🔍 Search Agent: Specializes in content discovery and music search');
-          this.ui.showInfo('📚 Library Agent: Manages playlists, saved music, and personal collections');
-          this.ui.showInfo('🎯 Queue Agent: Intelligent queue building and music curation');
-          this.ui.showInfo('💬 Communication: Orchestrator analyzes requests and routes to appropriate agents');
-          this.ui.showInfo(`🤖 Auto-queue monitor: ${this.queueMonitor.isRunning() ? 'ACTIVE' : 'INACTIVE'}`);
-        }
-        return true;
-        
-      case '/start-queue':
-      case '/auto-queue':
-        if (!orchestratorConfig) {
-          this.ui.showError('System not ready', 'Agents are still initializing. Please wait a moment and try again.');
-          return true;
-        }
-        // Create legacy agent config for queue monitor compatibility
-        const legacyAgents = {
-          spotify: orchestratorConfig.agents.search, // Use search agent as fallback
-          queue: orchestratorConfig.agents.queue
-        };
-        this.queueMonitor.start(legacyAgents);
-        return true;
-        
-      case '/stop-queue':
-        this.queueMonitor.stop();
-        return true;
-        
-      case '/history-songs':
-        this.queueMonitor.showSongHistory();
-        return true;
-        
-      case '/clear-history-songs':
-        this.queueMonitor.clearSongHistory();
-        return true;
-        
-      case '/pool-stats':
-        if (!orchestratorConfig) {
-          this.ui.showError('System not ready', 'Agents are still initializing. Please wait a moment and try again.');
-          return true;
-        }
-        // Create legacy agent config for queue monitor compatibility
-        const legacyAgentsForStats = {
-          spotify: orchestratorConfig.agents.search,
-          queue: orchestratorConfig.agents.queue
-        };
-        this.queueMonitor.showPoolStats(legacyAgentsForStats);
-        return true;
-        
-      case '/refresh-pool':
-        if (!orchestratorConfig) {
-          this.ui.showError('System not ready', 'Agents are still initializing. Please wait a moment and try again.');
-          return true;
-        }
-        // Create legacy agent config for queue monitor compatibility
-        const legacyAgentsForRefresh = {
-          spotify: orchestratorConfig.agents.search,
-          queue: orchestratorConfig.agents.queue
-        };
-        await this.queueMonitor.refreshSongPool(legacyAgentsForRefresh);
-        return true;
-        
-      default:
-        return false;
-    }
-  }
 
   /**
    * Clean up resources when shutting down
@@ -179,14 +72,8 @@ class ChatBot {
       // Initialize the new orchestrator system
       orchestratorConfig = await createSpotifyOrchestrator();
       
-      // Update command router context (agents set to null as we use orchestrator now)
-      const updatedContext: SystemContext = {
-        ui: this.ui,
-        conversation: this.conversation,
-        queueMonitor: this.queueMonitor,
-        agents: null
-      };
-      this.commandRouter.updateContext(updatedContext);
+      // Update router with orchestrator config
+      this.router.updateOrchestratorConfig(orchestratorConfig);
       
       this.ui.showConnectionStatus('connected');
       this.ui.showWelcomeInstructions();
@@ -239,49 +126,29 @@ class ChatBot {
     }
     
     try {
-      // DIRECT BYPASS: Handle /slash commands immediately
-      if (userInput.startsWith('/')) {
-        debug.log(`📥 [INPUT] Direct slash command: "${userInput}"`);
-        const handled = await this.executeSystemCommand(userInput);
-        if (handled) {
+      // Route command using unified router
+      debug.log(`📥 [INPUT] Processing: "${userInput}"`);
+      const route = this.router.routeCommand(userInput);
+      
+      switch (route.type) {
+        case 'system':
+          // Execute system command
+          const result = await this.router.executeSystemCommand(route.action!);
+          if (!result.success) {
+            this.ui.showError('Command failed', result.message || 'Unknown error');
+          }
           this.rl.prompt();
           return;
-        }
-        // If not handled, fall through to normal routing
-      }
-
-      // Use command router for intelligent parsing
-      debug.log(`📥 [INPUT] Processing: "${userInput}"`);
-      const routerResult = await this.commandRouter.routeCommand(userInput);
-      
-      switch (routerResult.type) {
-        case 'system_success':
-          // System command executed successfully
-          debug.log(`✅ [INPUT] System command completed: ${routerResult.content}`);
+          
+        case 'music':
+          // Route to Spotify Orchestrator
+          await this.handleOrchestratorInteraction(route.content!);
           this.rl.prompt();
           return;
           
         case 'error':
-          // System command failed
-          this.ui.showError('Command failed', routerResult.content);
-          this.rl.prompt();
-          return;
-          
-        case 'clarification':
-          // Agent needs clarification
-          this.ui.showInfo(`🤖 ${routerResult.content}`);
-          this.rl.prompt();
-          return;
-          
-        case 'orchestrator':
-          // Route to Spotify Orchestrator (new hierarchical system)
-          await this.handleOrchestratorInteraction(routerResult.content);
-          this.rl.prompt();
-          return;
-          
-        case 'spotify':
-          // Legacy support - route to orchestrator
-          await this.handleOrchestratorInteraction(routerResult.content);
+          // Handle routing error
+          this.ui.showError('Command failed', route.error || 'Unknown error');
           this.rl.prompt();
           return;
           

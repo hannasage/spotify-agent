@@ -2,7 +2,7 @@
  * Auto-queue management tools
  */
 
-import { BaseTool, createSuccessResult, validateAgents } from './base';
+import { BaseTool, createSuccessResult, createErrorResult } from './base';
 import { SystemContext, ToolResult } from './types';
 
 /**
@@ -13,15 +13,23 @@ export class StartAutoQueueTool extends BaseTool {
   description = 'Start the automatic queue monitoring system that adds songs every 10 minutes';
 
   protected async executeInternal(context: SystemContext): Promise<ToolResult> {
-    const agentsCheck = validateAgents(context);
-    if (agentsCheck) return agentsCheck;
+    // Check if we have the orchestrator config available
+    if (!context.orchestratorConfig) {
+      return createErrorResult('System not ready - agents are still initializing. Please wait a moment and try again.');
+    }
 
     if (context.queueMonitor.isRunning()) {
       return createSuccessResult('Auto-queue is already running');
     }
 
-    context.queueMonitor.start(context.agents!);
-    return createSuccessResult('🎯 Auto-queue monitor started! Will add 4 songs every 10 minutes.');
+    // Create legacy agent config for queue monitor compatibility
+    const legacyAgents = {
+      spotify: context.orchestratorConfig.agents.search,
+      queue: context.orchestratorConfig.agents.queue
+    };
+
+    context.queueMonitor.start(legacyAgents);
+    return createSuccessResult('🎯 Auto-queue monitor started! Will add 3 songs every 10 minutes.');
   }
 }
 

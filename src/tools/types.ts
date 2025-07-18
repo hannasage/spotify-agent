@@ -5,7 +5,7 @@
 import { UIManager } from '../ui';
 import { ConversationSession } from '../conversation';
 import { QueueMonitorService } from '../queueMonitor';
-import { AgentConfig } from '../types';
+import { AgentConfig, SpotifyOrchestratorConfig } from '../types';
 
 /**
  * Context object passed to all system tools
@@ -20,6 +20,8 @@ export interface SystemContext {
   queueMonitor: QueueMonitorService;
   /** Agent configuration (nullable during startup) */
   agents: AgentConfig | null;
+  /** Orchestrator configuration (available after startup) */
+  orchestratorConfig?: SpotifyOrchestratorConfig;
 }
 
 /**
