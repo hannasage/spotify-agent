@@ -59,7 +59,7 @@ ${toolDescriptions}`;
       const response = result.finalOutput?.trim();
 
       if (!response) {
-        return { type: 'spotify', content: userInput };
+        return { type: 'orchestrator', content: userInput };
       }
 
       // Parse the agent's response
@@ -67,6 +67,10 @@ ${toolDescriptions}`;
         const toolName = response.substring(6).trim();
         debug.log(`🔀 [COMMAND-ROUTER] Detected system tool: ${toolName}`);
         return await this.executeSystemTool(toolName);
+      } else if (response.startsWith('ORCHESTRATOR: ')) {
+        const orchestratorRequest = response.substring(14).trim();
+        debug.log(`🔀 [COMMAND-ROUTER] Detected Orchestrator request: ${orchestratorRequest}`);
+        return { type: 'orchestrator', content: orchestratorRequest };
       } else if (response.startsWith('SPOTIFY: ')) {
         const spotifyRequest = response.substring(9).trim();
         debug.log(`🔀 [COMMAND-ROUTER] Detected Spotify request: ${spotifyRequest}`);
@@ -76,16 +80,16 @@ ${toolDescriptions}`;
         debug.log(`🔀 [COMMAND-ROUTER] Needs clarification: ${clarification}`);
         return { type: 'clarification', content: clarification };
       } else {
-        // Fallback: treat as Spotify request
-        debug.log(`🔀 [COMMAND-ROUTER] Fallback to Spotify: ${userInput}`);
-        return { type: 'spotify', content: userInput };
+        // Fallback: treat as Orchestrator request
+        debug.log(`🔀 [COMMAND-ROUTER] Fallback to Orchestrator: ${userInput}`);
+        return { type: 'orchestrator', content: userInput };
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       debug.log(`🔀 [COMMAND-ROUTER] Error: ${errorMessage}`);
       
-      // Fallback to treating as Spotify request
-      return { type: 'spotify', content: userInput };
+      // Fallback to treating as Orchestrator request
+      return { type: 'orchestrator', content: userInput };
     }
   }
 
@@ -135,7 +139,7 @@ ${toolDescriptions}`;
  */
 export interface CommandRouterResult {
   /** Type of result */
-  type: 'system_success' | 'spotify' | 'clarification' | 'error';
+  type: 'system_success' | 'spotify' | 'orchestrator' | 'clarification' | 'error';
   /** Content/message */
   content: string;
 }

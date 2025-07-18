@@ -65,11 +65,19 @@ export interface ConnectionStatusConfig {
 /** Status types for connection display */
 export type ConnectionStatus = 'connecting' | 'connected' | 'error';
 
-/** Agent configuration structure */
+/** Legacy agent configuration structure (kept for queue monitor compatibility) */
 export interface AgentConfig {
   /** Collection of created agents */
   spotify: import('@openai/agents').Agent;
   queue: import('@openai/agents').Agent;
+}
+
+/** Spotify orchestrator configuration structure */
+export interface SpotifyOrchestratorConfig {
+  /** Spotify orchestrator instance */
+  orchestrator: import('./orchestrator').SpotifyOrchestrator;
+  /** Specialized agents configuration */
+  agents: import('./orchestrator').SpotifyAgentConfig;
 }
 
 /** Auto-queue monitor state */

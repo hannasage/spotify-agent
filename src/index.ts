@@ -1,19 +1,18 @@
-import { run } from '@openai/agents';
 import * as readline from 'readline';
 import * as dotenv from 'dotenv';
 import { UIManager } from './ui';
 import { debug } from './debug';
-import { AgentConfig } from './types';
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from './constants';
 import { ConversationSession } from './conversation';
 import { QueueMonitorService } from './queueMonitor';
-import { createAgents, cleanupMCPServer } from './agents';
+import { createSpotifyOrchestrator, cleanupMCPServer } from './agents';
 import { CommandRouter, SystemContext } from './tools';
+import { SpotifyOrchestratorConfig } from './types';
 
 dotenv.config();
 
 
-let agents: AgentConfig | null = null;
+let orchestratorConfig: SpotifyOrchestratorConfig | null = null;
 
 
 /**
@@ -39,7 +38,7 @@ class ChatBot {
       ui: this.ui,
       conversation: this.conversation,
       queueMonitor: this.queueMonitor,
-      agents: null // Will be updated when agents are initialized
+      agents: null // Legacy support for queue monitor
     };
     this.commandRouter = new CommandRouter(systemContext);
     
@@ -74,20 +73,28 @@ class ChatBot {
         return true;
         
       case '/agents':
-        this.ui.showInfo('Multi-agent system status:');
-        this.ui.showInfo('🎵 Spotify Assistant: Handles user interaction and music control');
-        this.ui.showInfo('🎯 Queue Manager: Specializes in music curation and recommendations');
-        this.ui.showInfo('💬 Communication: Agents coordinate via handoffs for seamless experience');
+        this.ui.showInfo('Hierarchical multi-agent system status:');
+        this.ui.showInfo('🎵 Spotify Orchestrator: Coordinates specialized agents for optimal performance');
+        this.ui.showInfo('🎮 Playback Agent: Handles real-time playback control and device management');
+        this.ui.showInfo('🔍 Search Agent: Specializes in content discovery and music search');
+        this.ui.showInfo('📚 Library Agent: Manages playlists, saved music, and personal collections');
+        this.ui.showInfo('🎯 Queue Agent: Intelligent queue building and music curation');
+        this.ui.showInfo('💬 Communication: Orchestrator analyzes requests and routes to appropriate agents');
         this.ui.showInfo(`🤖 Auto-queue monitor: ${this.queueMonitor.isRunning() ? 'ACTIVE' : 'INACTIVE'}`);
         return true;
         
       case '/start-queue':
       case '/auto-queue':
-        if (!agents) {
-          this.ui.showError('Agents not initialized', 'Please wait for the system to connect');
+        if (!orchestratorConfig) {
+          this.ui.showError('Orchestrator not initialized', 'Please wait for the system to connect');
           return true;
         }
-        this.queueMonitor.start(agents);
+        // Create legacy agent config for queue monitor compatibility
+        const legacyAgents = {
+          spotify: orchestratorConfig.agents.search, // Use search agent as fallback
+          queue: orchestratorConfig.agents.queue
+        };
+        this.queueMonitor.start(legacyAgents);
         return true;
         
       case '/stop-queue':
@@ -103,19 +110,29 @@ class ChatBot {
         return true;
         
       case '/pool-stats':
-        if (!agents) {
-          this.ui.showError('Agents not initialized', 'Please wait for the system to connect');
+        if (!orchestratorConfig) {
+          this.ui.showError('Orchestrator not initialized', 'Please wait for the system to connect');
           return true;
         }
-        this.queueMonitor.showPoolStats(agents);
+        // Create legacy agent config for queue monitor compatibility
+        const legacyAgentsForStats = {
+          spotify: orchestratorConfig.agents.search,
+          queue: orchestratorConfig.agents.queue
+        };
+        this.queueMonitor.showPoolStats(legacyAgentsForStats);
         return true;
         
       case '/refresh-pool':
-        if (!agents) {
-          this.ui.showError('Agents not initialized', 'Please wait for the system to connect');
+        if (!orchestratorConfig) {
+          this.ui.showError('Orchestrator not initialized', 'Please wait for the system to connect');
           return true;
         }
-        await this.queueMonitor.refreshSongPool(agents);
+        // Create legacy agent config for queue monitor compatibility
+        const legacyAgentsForRefresh = {
+          spotify: orchestratorConfig.agents.search,
+          queue: orchestratorConfig.agents.queue
+        };
+        await this.queueMonitor.refreshSongPool(legacyAgentsForRefresh);
         return true;
         
       default:
@@ -148,20 +165,21 @@ class ChatBot {
     this.ui.showConnectionStatus('connecting');
     
     try {
-      agents = await createAgents();
+      // Initialize the new orchestrator system
+      orchestratorConfig = await createSpotifyOrchestrator();
       
-      // Update command router context with initialized agents
+      // Update command router context (agents set to null as we use orchestrator now)
       const updatedContext: SystemContext = {
         ui: this.ui,
         conversation: this.conversation,
         queueMonitor: this.queueMonitor,
-        agents: agents
+        agents: null
       };
       this.commandRouter.updateContext(updatedContext);
       
       this.ui.showConnectionStatus('connected');
       this.ui.showWelcomeInstructions();
-      this.ui.showInfo('🤖 Multi-agent system ready! Spotify Assistant + Queue Manager + Command Router available.');
+      this.ui.showInfo('🤖 Hierarchical multi-agent system ready! Orchestrator + Specialized Agents + Command Router available.');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.ui.showConnectionStatus('error', errorMessage);
@@ -233,36 +251,41 @@ class ChatBot {
           this.rl.prompt();
           return;
           
+        case 'orchestrator':
+          // Route to Spotify Orchestrator (new hierarchical system)
+          await this.handleOrchestratorInteraction(routerResult.content);
+          this.rl.prompt();
+          return;
+          
         case 'spotify':
-          // Route to Spotify agent
-          await this.handleSpotifyInteraction(routerResult.content);
+          // Legacy support - route to orchestrator
+          await this.handleOrchestratorInteraction(routerResult.content);
           this.rl.prompt();
           return;
           
         default:
-          // Default to Spotify interaction
-          await this.handleSpotifyInteraction(userInput);
+          // Default to Orchestrator interaction
+          await this.handleOrchestratorInteraction(userInput);
           this.rl.prompt();
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       debug.log(`❌ [INPUT] Error processing input: ${errorMessage}`);
       
-      // Fallback to Spotify interaction on any error
-      await this.handleSpotifyInteraction(userInput);
+      // Fallback to Orchestrator interaction on any error
+      await this.handleOrchestratorInteraction(userInput);
       this.rl.prompt();
     }
   }
 
-
   /**
-   * Handle Spotify interaction with the Spotify agent
+   * Handle Spotify interaction with the new Orchestrator system
    * @param userInput - The user input to process (music-related requests)
    * @private
    */
-  private async handleSpotifyInteraction(userInput: string): Promise<void> {
-    if (!agents) {
-      this.ui.showError('Agents not initialized', 'Please wait for the system to connect');
+  private async handleOrchestratorInteraction(userInput: string): Promise<void> {
+    if (!orchestratorConfig) {
+      this.ui.showError('Orchestrator not initialized', 'Please wait for the system to connect');
       return;
     }
 
@@ -272,19 +295,37 @@ class ChatBot {
       // Add user message to conversation history
       this.conversation.addUserMessage(userInput);
       
-      // Create input with conversation context
-      const contextualInput = this.conversation.getFormattedHistory() + ' ' + userInput;
+      // Get conversation context
+      const conversationContext = this.conversation.getFormattedHistory();
       
-      // Use the Spotify agent for all user interactions
-      const result = await run(agents.spotify, contextualInput);
+      // Use the Spotify Orchestrator for intelligent agent coordination
+      const result = await orchestratorConfig.orchestrator.processRequest(userInput, conversationContext);
       this.ui.stopSpinner();
       
-      const response = result.finalOutput || 'No response received';
+      if (result.success) {
+        // Add assistant response to conversation history
+        this.conversation.addAssistantMessage(result.response);
+        
+        // Show which agents were used for transparency
+        if (result.agentsUsed.length > 0) {
+          debug.log(`🎵 [ORCHESTRATOR] Used agents: ${result.agentsUsed.join(', ')}`);
+        }
+        
+        // Handle clarification requests
+        if (result.requiresClarification) {
+          debug.log(`🎵 [ORCHESTRATOR] Response requires clarification`);
+          // Add clarification context to conversation history for next turn
+          if (result.clarificationContext) {
+            const contextInfo = `\nOriginal request: ${result.clarificationContext.originalRequest}\nPrimary agent: ${result.clarificationContext.primaryAgent}\nSecondary agents: ${result.clarificationContext.secondaryAgents?.join(', ') || 'none'}`;
+            this.conversation.addAssistantMessage(contextInfo);
+          }
+        }
+        
+        console.log(this.ui.formatBotResponse(result.response) + '\n');
+      } else {
+        this.ui.showError('Request failed', result.response);
+      }
       
-      // Add assistant response to conversation history
-      this.conversation.addAssistantMessage(response);
-      
-      console.log(this.ui.formatBotResponse(response) + '\n');
     } catch (error) {
       this.ui.stopSpinner();
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -295,6 +336,7 @@ class ChatBot {
       console.log('');
     }
   }
+
 }
 
 /**

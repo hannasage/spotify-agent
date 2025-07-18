@@ -1,6 +1,7 @@
 import { Agent, MCPServerStdio } from '@openai/agents';
-import { AgentConfig } from './types';
+import { SpotifyOrchestratorConfig } from './types';
 import { loadPrompt } from './prompts/utils';
+import { SpotifyOrchestrator, SpotifyAgentConfig } from './orchestrator';
 
 /**
  * Agent factory and configuration module
@@ -33,19 +34,44 @@ async function createMCPServer(): Promise<MCPServerStdio> {
   return server;
 }
 
+
 /**
- * Create and configure the agent system
+ * Create and configure the Spotify Orchestrator system
  * 
- * This function initializes both the main Spotify agent and the specialized
- * queue manager agent, connecting them to the MCP server for Spotify API access.
+ * This function initializes the Spotify Orchestrator with specialized agents
+ * for playback, search, library management, and queue management.
  * 
- * @returns Object containing both configured agents
+ * @returns Object containing the orchestrator and specialized agents
  * @throws Error if MCP server connection fails
  */
-export async function createAgents(): Promise<AgentConfig> {
+export async function createSpotifyOrchestrator(): Promise<SpotifyOrchestratorConfig> {
   mcpServer = await createMCPServer();
   
-  // Create Queue Agent - specialized in music curation
+  // Create specialized agents
+  const playbackAgent = new Agent({
+    name: 'Playback Control Agent',
+    model: 'gpt-4o-mini',
+    instructions: loadPrompt('playback-agent'),
+    tools: [],
+    mcpServers: [mcpServer]
+  });
+
+  const searchAgent = new Agent({
+    name: 'Search & Discovery Agent',
+    model: 'gpt-4o-mini',
+    instructions: loadPrompt('search-agent'),
+    tools: [],
+    mcpServers: [mcpServer]
+  });
+
+  const libraryAgent = new Agent({
+    name: 'Library Management Agent',
+    model: 'gpt-4o-mini',
+    instructions: loadPrompt('library-agent'),
+    tools: [],
+    mcpServers: [mcpServer]
+  });
+
   const queueAgent = new Agent({
     name: 'Queue Manager',
     model: 'gpt-4o-mini',
@@ -54,16 +80,21 @@ export async function createAgents(): Promise<AgentConfig> {
     mcpServers: [mcpServer]
   });
 
-  // Create main Spotify Agent - handles user interaction and delegates queue management
-  const spotifyAgent = new Agent({
-    name: 'Spotify Assistant',
-    model: 'gpt-4o-mini',
-    instructions: loadPrompt('spotify-assistant'),
-    tools: [],
-    mcpServers: [mcpServer]
-  });
+  // Create the specialized agents configuration
+  const specializedAgents: SpotifyAgentConfig = {
+    playback: playbackAgent,
+    search: searchAgent,
+    library: libraryAgent,
+    queue: queueAgent
+  };
 
-  return { spotify: spotifyAgent, queue: queueAgent };
+  // Create the orchestrator
+  const orchestrator = new SpotifyOrchestrator(specializedAgents);
+
+  return {
+    orchestrator,
+    agents: specializedAgents
+  };
 }
 
 /**
