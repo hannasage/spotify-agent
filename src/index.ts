@@ -73,20 +73,31 @@ class ChatBot {
         return true;
         
       case '/agents':
-        this.ui.showInfo('Hierarchical multi-agent system status:');
-        this.ui.showInfo('🎵 Spotify Orchestrator: Coordinates specialized agents for optimal performance');
-        this.ui.showInfo('🎮 Playback Agent: Handles real-time playback control and device management');
-        this.ui.showInfo('🔍 Search Agent: Specializes in content discovery and music search');
-        this.ui.showInfo('📚 Library Agent: Manages playlists, saved music, and personal collections');
-        this.ui.showInfo('🎯 Queue Agent: Intelligent queue building and music curation');
-        this.ui.showInfo('💬 Communication: Orchestrator analyzes requests and routes to appropriate agents');
-        this.ui.showInfo(`🤖 Auto-queue monitor: ${this.queueMonitor.isRunning() ? 'ACTIVE' : 'INACTIVE'}`);
+        if (!orchestratorConfig) {
+          this.ui.showInfo('Hierarchical multi-agent system status:');
+          this.ui.showInfo('🎵 Spotify Orchestrator: Initializing...');
+          this.ui.showInfo('🎮 Playback Agent: Waiting for orchestrator');
+          this.ui.showInfo('🔍 Search Agent: Waiting for orchestrator');
+          this.ui.showInfo('📚 Library Agent: Waiting for orchestrator');
+          this.ui.showInfo('🎯 Queue Agent: Waiting for orchestrator');
+          this.ui.showInfo('💬 Communication: System is starting up');
+          this.ui.showInfo(`🤖 Auto-queue monitor: ${this.queueMonitor.isRunning() ? 'ACTIVE' : 'INACTIVE'}`);
+        } else {
+          this.ui.showInfo('Hierarchical multi-agent system status:');
+          this.ui.showInfo('🎵 Spotify Orchestrator: Coordinates specialized agents for optimal performance');
+          this.ui.showInfo('🎮 Playback Agent: Handles real-time playback control and device management');
+          this.ui.showInfo('🔍 Search Agent: Specializes in content discovery and music search');
+          this.ui.showInfo('📚 Library Agent: Manages playlists, saved music, and personal collections');
+          this.ui.showInfo('🎯 Queue Agent: Intelligent queue building and music curation');
+          this.ui.showInfo('💬 Communication: Orchestrator analyzes requests and routes to appropriate agents');
+          this.ui.showInfo(`🤖 Auto-queue monitor: ${this.queueMonitor.isRunning() ? 'ACTIVE' : 'INACTIVE'}`);
+        }
         return true;
         
       case '/start-queue':
       case '/auto-queue':
         if (!orchestratorConfig) {
-          this.ui.showError('Orchestrator not initialized', 'Please wait for the system to connect');
+          this.ui.showError('System not ready', 'Agents are still initializing. Please wait a moment and try again.');
           return true;
         }
         // Create legacy agent config for queue monitor compatibility
@@ -111,7 +122,7 @@ class ChatBot {
         
       case '/pool-stats':
         if (!orchestratorConfig) {
-          this.ui.showError('Orchestrator not initialized', 'Please wait for the system to connect');
+          this.ui.showError('System not ready', 'Agents are still initializing. Please wait a moment and try again.');
           return true;
         }
         // Create legacy agent config for queue monitor compatibility
@@ -124,7 +135,7 @@ class ChatBot {
         
       case '/refresh-pool':
         if (!orchestratorConfig) {
-          this.ui.showError('Orchestrator not initialized', 'Please wait for the system to connect');
+          this.ui.showError('System not ready', 'Agents are still initializing. Please wait a moment and try again.');
           return true;
         }
         // Create legacy agent config for queue monitor compatibility
@@ -228,6 +239,17 @@ class ChatBot {
     }
     
     try {
+      // DIRECT BYPASS: Handle /slash commands immediately
+      if (userInput.startsWith('/')) {
+        debug.log(`📥 [INPUT] Direct slash command: "${userInput}"`);
+        const handled = await this.executeSystemCommand(userInput);
+        if (handled) {
+          this.rl.prompt();
+          return;
+        }
+        // If not handled, fall through to normal routing
+      }
+
       // Use command router for intelligent parsing
       debug.log(`📥 [INPUT] Processing: "${userInput}"`);
       const routerResult = await this.commandRouter.routeCommand(userInput);

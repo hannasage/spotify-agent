@@ -47,14 +47,27 @@ ${toolDescriptions}`;
    * Route user input to appropriate handler
    */
   async routeCommand(userInput: string): Promise<CommandRouterResult> {
-    if (!this.agent) {
-      await this.initialize();
-    }
-
     try {
       debug.log(`🔀 [COMMAND-ROUTER] Analyzing: "${userInput}"`);
       
-      // Use the agent to analyze the input
+      // DIRECT BYPASS: Slash commands should never reach here, but just in case
+      if (userInput.startsWith('/')) {
+        debug.log(`🔀 [COMMAND-ROUTER] WARNING: Slash command reached router, routing to orchestrator: "${userInput}"`);
+        return { type: 'orchestrator', content: userInput };
+      }
+      
+      // First, try direct keyword matching for common system commands
+      const directMatch = this.tryDirectKeywordMatch(userInput);
+      if (directMatch) {
+        debug.log(`🔀 [COMMAND-ROUTER] Direct keyword match: ${directMatch}`);
+        return await this.executeSystemTool(directMatch);
+      }
+
+      // If no direct match, use the agent for more complex analysis
+      if (!this.agent) {
+        await this.initialize();
+      }
+      
       const result = await run(this.agent!, userInput, { maxTurns: 3 });
       const response = result.finalOutput?.trim();
 
@@ -124,6 +137,114 @@ ${toolDescriptions}`;
         content: `Failed to execute ${toolName}: ${errorMessage}` 
       };
     }
+  }
+
+  /**
+   * Try direct keyword matching for common system commands
+   */
+  private tryDirectKeywordMatch(userInput: string): string | null {
+    const input = userInput.toLowerCase().trim();
+    
+    // Auto-queue start patterns
+    if (this.matchesAny(input, [
+      'start auto queue', 'start auto mode', 'enable auto queue', 'turn on auto queue',
+      'auto queue on', 'start continuous play', 'enable continuous play', 'auto mode on',
+      'turn on continuous', 'start auto', 'enable auto', 'auto on'
+    ])) {
+      return 'start_auto_queue';
+    }
+    
+    // Auto-queue stop patterns
+    if (this.matchesAny(input, [
+      'stop auto queue', 'stop auto mode', 'disable auto queue', 'turn off auto queue',
+      'auto queue off', 'stop continuous play', 'disable continuous play', 'auto mode off',
+      'turn off continuous', 'stop auto', 'disable auto', 'auto off'
+    ])) {
+      return 'stop_auto_queue';
+    }
+    
+    // Pool stats patterns
+    if (this.matchesAny(input, [
+      'show pool stats', 'pool statistics', 'song pool stats', 'pool info', 'show pool',
+      'pool stats', 'show song pool', 'pool information'
+    ])) {
+      return 'show_pool_stats';
+    }
+    
+    // Pool refresh patterns
+    if (this.matchesAny(input, [
+      'refresh pool', 'reload pool', 'update pool', 'refresh song pool',
+      'reload song pool', 'update song pool'
+    ])) {
+      return 'refresh_pool';
+    }
+    
+    // Song history patterns
+    if (this.matchesAny(input, [
+      'show song history', 'song history', 'recent songs', 'what did i play',
+      'show history', 'recent tracks', 'what songs did i play', 'played songs'
+    ])) {
+      return 'show_song_history';
+    }
+    
+    // Clear history patterns
+    if (this.matchesAny(input, [
+      'clear song history', 'clear history', 'reset history', 'delete history',
+      'clear song history', 'remove history'
+    ])) {
+      return 'clear_song_history';
+    }
+    
+    // Help patterns
+    if (this.matchesAny(input, [
+      'help', 'show help', 'commands', 'what can you do', 'available commands',
+      'show commands', 'list commands'
+    ])) {
+      return 'show_help';
+    }
+    
+    // Agent status patterns
+    if (this.matchesAny(input, [
+      'agent status', 'system status', 'show agents', 'what agents', 'agents',
+      'show system status', 'system info'
+    ])) {
+      return 'show_agent_status';
+    }
+    
+    // Clear conversation patterns
+    if (this.matchesAny(input, [
+      'clear conversation', 'clear chat', 'reset conversation', 'start over',
+      'clear messages', 'reset chat'
+    ])) {
+      return 'clear_conversation';
+    }
+    
+    // Conversation history patterns
+    if (this.matchesAny(input, [
+      'show conversation history', 'conversation history', 'chat history',
+      'show chat history', 'message history'
+    ])) {
+      return 'show_conversation_history';
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Check if input matches any of the provided patterns
+   */
+  private matchesAny(input: string, patterns: string[]): boolean {
+    return patterns.some(pattern => {
+      // Try exact match first
+      if (input === pattern) return true;
+      
+      // Try contains match for key phrases
+      const words = pattern.split(' ');
+      const inputWords = input.split(' ');
+      
+      // Check if all words from pattern are in input
+      return words.every(word => inputWords.includes(word));
+    });
   }
 
   /**
