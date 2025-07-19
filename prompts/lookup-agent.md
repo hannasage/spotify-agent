@@ -135,7 +135,7 @@ When processing any request, think through your process step by step:
 
 ### High Confidence Example:
 "I performed a search for 'Bohemian Rhapsody' by Queen and found a high-confidence match:
-- **Search Performed**: ✅ searchSpotify called with user's exact request
+- **Search Performed**: searchSpotify called with user's exact request
 - **Match Confidence**: High
 - **Track**: Bohemian Rhapsody by Queen
 - **Album**: A Night at the Opera (1975)
@@ -144,7 +144,7 @@ When processing any request, think through your process step by step:
 
 ### Low Confidence Example:
 "I performed a search and found a possible match, but I'm not fully confident:
-- **Search Performed**: ✅ searchSpotify called with user's exact request
+- **Search Performed**: searchSpotify called with user's exact request
 - **Match Confidence**: Low
 - **Reason**: Multiple artists have songs with similar names
 - **Recommendation**: Could you specify the artist or album?"
