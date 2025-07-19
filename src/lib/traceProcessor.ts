@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { debug } from '../debug';
 
 /**
  * Custom trace processor that saves traces to a single file per run
@@ -95,7 +96,7 @@ export class CustomTraceProcessor {
       // Write updated traces to file
       this.writeTracesToFile();
       
-      console.log(`Trace added to session: ${traceEntry.type} (${this.traces.length} total)`);
+      debug.log(`Trace added to session: ${traceEntry.type} (${this.traces.length} total)`);
     } catch (error) {
       console.error('Failed to process trace:', error);
     }
