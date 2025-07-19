@@ -101,18 +101,75 @@ export class SpotifyAgentEvaluator {
     const toolCalls = TraceAnalysisUtils.extractToolCalls(traces);
     const agentExecutions = TraceAnalysisUtils.extractAgentExecutions(traces);
 
-    // Calculate response times
+    // Calculate response times per agent (from user input to final agent response)
     let totalResponseTime = 0;
     let responseCount = 0;
+    const agentResponseTimes = {
+      systemCommands: [] as number[],
+      lookupAgent: [] as number[],
+      playbackAgent: [] as number[]
+    };
 
-    for (let i = 0; i < userInputs.length; i++) {
-      const input = userInputs[i];
-      const nextInput = userInputs[i + 1];
+    for (const input of userInputs) {
+      const inputTime = new Date(input.timestamp);
       
-      if (nextInput && input) {
-        const duration = TraceAnalysisUtils.calculateDuration(input, nextInput);
+      // Find the most specific routing/response after this input
+      let finalResponse: TraceEntry | undefined;
+      let agentType: keyof typeof agentResponseTimes;
+      
+      // Find the next input to limit our search window
+      const nextInputIndex = userInputs.indexOf(input) + 1;
+      const nextInputTime = nextInputIndex < userInputs.length 
+        ? new Date(userInputs[nextInputIndex]?.timestamp || new Date()) 
+        : new Date(Date.now()); // Use current time if this is the last input
+      
+      // Look for agent-specific routing first (within this input's time window)
+      const lookupRouting = traces.find(trace => {
+        const traceTime = new Date(trace.timestamp);
+        return traceTime > inputTime && 
+               traceTime < nextInputTime &&
+               trace.type === 'routing_to_lookup';
+      });
+      
+      const playbackRouting = traces.find(trace => {
+        const traceTime = new Date(trace.timestamp);
+        return traceTime > inputTime && 
+               traceTime < nextInputTime &&
+               trace.type === 'routing_to_playback';
+      });
+      
+      if (lookupRouting) {
+        agentType = 'lookupAgent';
+        finalResponse = traces.find(trace => {
+          const traceTime = new Date(trace.timestamp);
+          return traceTime > new Date(lookupRouting.timestamp) &&
+                 traceTime < nextInputTime &&
+                 trace.type === 'lookup_interaction_success';
+        });
+      } else if (playbackRouting) {
+        agentType = 'playbackAgent';
+        finalResponse = traces.find(trace => {
+          const traceTime = new Date(trace.timestamp);
+          return traceTime > new Date(playbackRouting.timestamp) &&
+                 traceTime < nextInputTime &&
+                 trace.type === 'playback_interaction_success';
+        });
+      } else {
+        // Fall back to system command
+        agentType = 'systemCommands';
+        finalResponse = traces.find(trace => {
+          const traceTime = new Date(trace.timestamp);
+          return traceTime > inputTime && 
+                 traceTime < nextInputTime &&
+                 trace.type === 'command_router_result';
+        });
+      }
+      
+      if (finalResponse) {
+        const duration = TraceAnalysisUtils.calculateDuration(input, finalResponse);
         totalResponseTime += duration;
         responseCount++;
+        agentResponseTimes[agentType].push(duration);
       }
     }
 
@@ -137,6 +194,17 @@ export class SpotifyAgentEvaluator {
 
     return {
       averageResponseTime: responseCount > 0 ? totalResponseTime / responseCount : 0,
+      agentResponseTimes: {
+        systemCommands: agentResponseTimes.systemCommands.length > 0 
+          ? agentResponseTimes.systemCommands.reduce((sum, time) => sum + time, 0) / agentResponseTimes.systemCommands.length 
+          : 0,
+        lookupAgent: agentResponseTimes.lookupAgent.length > 0 
+          ? agentResponseTimes.lookupAgent.reduce((sum, time) => sum + time, 0) / agentResponseTimes.lookupAgent.length 
+          : 0,
+        playbackAgent: agentResponseTimes.playbackAgent.length > 0 
+          ? agentResponseTimes.playbackAgent.reduce((sum, time) => sum + time, 0) / agentResponseTimes.playbackAgent.length 
+          : 0
+      },
       totalToolCalls: toolCalls.length,
       averageToolCallDuration: toolCallDurations.length > 0 
         ? toolCallDurations.reduce((sum, duration) => sum + duration, 0) / toolCallDurations.length 

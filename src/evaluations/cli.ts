@@ -149,7 +149,10 @@ class EvaluationCLI {
     
     // Performance metrics
     console.log('\n⚡ PERFORMANCE METRICS:');
-    console.log(`  • Average Response Time: ${result.metrics.performance.averageResponseTime.toFixed(0)}ms`);
+    console.log(`  • Overall Average Response Time: ${result.metrics.performance.averageResponseTime.toFixed(0)}ms`);
+    console.log(`  • System Commands: ${result.metrics.performance.agentResponseTimes.systemCommands.toFixed(0)}ms`);
+    console.log(`  • Lookup Agent: ${result.metrics.performance.agentResponseTimes.lookupAgent.toFixed(0)}ms`);
+    console.log(`  • Playback Agent: ${result.metrics.performance.agentResponseTimes.playbackAgent.toFixed(0)}ms`);
     console.log(`  • Total Tool Calls: ${result.metrics.performance.totalToolCalls}`);
     console.log(`  • Tool Call Success Rate: ${result.metrics.performance.toolCallSuccessRate.toFixed(1)}%`);
     console.log(`  • Average Tool Call Duration: ${result.metrics.performance.averageToolCallDuration.toFixed(0)}ms`);
@@ -221,6 +224,21 @@ class EvaluationCLI {
     const avgToolCallSuccess = results.reduce((sum, r) => sum + r.metrics.performance.toolCallSuccessRate, 0) / results.length;
     const avgRoutingAccuracy = results.reduce((sum, r) => sum + r.metrics.accuracy.commandRoutingAccuracy, 0) / results.length;
     
+    // Calculate per-agent averages (only include sessions with non-zero values)
+    const systemCommandTimes = results.map(r => r.metrics.performance.agentResponseTimes.systemCommands).filter(t => t > 0);
+    const lookupAgentTimes = results.map(r => r.metrics.performance.agentResponseTimes.lookupAgent).filter(t => t > 0);
+    const playbackAgentTimes = results.map(r => r.metrics.performance.agentResponseTimes.playbackAgent).filter(t => t > 0);
+    
+    const avgSystemCommandTime = systemCommandTimes.length > 0 
+      ? systemCommandTimes.reduce((sum, t) => sum + t, 0) / systemCommandTimes.length 
+      : 0;
+    const avgLookupAgentTime = lookupAgentTimes.length > 0 
+      ? lookupAgentTimes.reduce((sum, t) => sum + t, 0) / lookupAgentTimes.length 
+      : 0;
+    const avgPlaybackAgentTime = playbackAgentTimes.length > 0 
+      ? playbackAgentTimes.reduce((sum, t) => sum + t, 0) / playbackAgentTimes.length 
+      : 0;
+    
     // Grade distribution
     const gradeDistribution = results.reduce((acc, r) => {
       acc[r.grade] = (acc[r.grade] || 0) + 1;
@@ -229,7 +247,10 @@ class EvaluationCLI {
     
     console.log(`\n🎯 OVERALL PERFORMANCE:`);
     console.log(`  • Average Score: ${avgScore.toFixed(1)}/100`);
-    console.log(`  • Average Response Time: ${avgResponseTime.toFixed(0)}ms`);
+    console.log(`  • Overall Average Response Time: ${avgResponseTime.toFixed(0)}ms`);
+    console.log(`  • System Commands: ${avgSystemCommandTime.toFixed(0)}ms (${systemCommandTimes.length} sessions)`);
+    console.log(`  • Lookup Agent: ${avgLookupAgentTime.toFixed(0)}ms (${lookupAgentTimes.length} sessions)`);
+    console.log(`  • Playback Agent: ${avgPlaybackAgentTime.toFixed(0)}ms (${playbackAgentTimes.length} sessions)`);
     console.log(`  • Average Tool Call Success Rate: ${avgToolCallSuccess.toFixed(1)}%`);
     console.log(`  • Average Routing Accuracy: ${avgRoutingAccuracy.toFixed(1)}%`);
     

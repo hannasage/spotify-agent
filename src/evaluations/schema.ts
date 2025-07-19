@@ -33,6 +33,11 @@ export interface EvaluationMetrics {
   // Performance metrics
   performance: {
     averageResponseTime: number; // milliseconds
+    agentResponseTimes: {
+      systemCommands: number; // milliseconds
+      lookupAgent: number; // milliseconds
+      playbackAgent: number; // milliseconds
+    };
     totalToolCalls: number;
     averageToolCallDuration: number; // milliseconds
     toolCallSuccessRate: number; // percentage
