@@ -23,9 +23,11 @@ export interface ToolCallTrace {
 export class ToolCallTracer {
   private activeToolCalls: Map<string, { startTime: number; toolName: string; parameters: any; agentName: string }> = new Map();
   private traceCallback: (trace: ToolCallTrace) => Promise<void>;
+  private getSessionId: () => string;
 
-  constructor(traceCallback: (trace: ToolCallTrace) => Promise<void>) {
+  constructor(traceCallback: (trace: ToolCallTrace) => Promise<void>, getSessionId?: () => string) {
     this.traceCallback = traceCallback;
+    this.getSessionId = getSessionId || (() => 'current_session');
   }
 
   /**
@@ -58,7 +60,7 @@ export class ToolCallTracer {
       toolName,
       toolParameters: parameters,
       agentName,
-      sessionId: 'current_session' // Will be replaced by actual session ID
+      sessionId: this.getSessionId()
     });
 
     return toolCallId;
@@ -86,7 +88,7 @@ export class ToolCallTracer {
       toolResult: result,
       duration,
       agentName: activeCall.agentName,
-      sessionId: 'current_session' // Will be replaced by actual session ID
+      sessionId: this.getSessionId()
     });
 
     // Remove from active calls
@@ -115,7 +117,7 @@ export class ToolCallTracer {
       duration,
       error,
       agentName: activeCall.agentName,
-      sessionId: 'current_session' // Will be replaced by actual session ID
+      sessionId: this.getSessionId()
     });
 
     // Remove from active calls
@@ -149,10 +151,12 @@ export class ToolCallTracer {
 export async function runWithToolCallTracing(
   agent: Agent,
   input: string,
-  traceCallback: (trace: ToolCallTrace) => Promise<void>
+  traceCallback: (trace: ToolCallTrace) => Promise<void>,
+  getSessionId?: () => string
 ): Promise<any> {
   // Create a proxy to intercept tool calls
   const originalRun = run;
+  const sessionId = getSessionId ? getSessionId() : 'agent_execution_session';
   
   // For now, we'll use the standard run function but enhance our tracing
   // In a future version, we could intercept the actual tool calls if the SDK supports it
@@ -171,7 +175,7 @@ export async function runWithToolCallTracing(
       model: agent.model || 'unknown'
     },
     agentName: agent.name || 'unknown',
-    sessionId: 'current_session'
+    sessionId
   });
 
   await traceCallback({
@@ -190,7 +194,7 @@ export async function runWithToolCallTracing(
       error: undefined
     },
     agentName: agent.name || 'unknown',
-    sessionId: 'current_session'
+    sessionId
   });
 
   return result;
@@ -199,6 +203,9 @@ export async function runWithToolCallTracing(
 /**
  * Factory function to create a tool call tracer
  */
-export function createToolCallTracer(traceCallback: (trace: ToolCallTrace) => Promise<void>): ToolCallTracer {
-  return new ToolCallTracer(traceCallback);
+export function createToolCallTracer(traceCallback: (trace: ToolCallTrace) => Promise<void>, getSessionId?: () => string): ToolCallTracer {
+  return new ToolCallTracer(traceCallback, getSessionId);
 }
+
+// Re-export MCPToolCallTrace for convenience
+export type { MCPToolCallTrace } from './mcpToolCallInterceptor';

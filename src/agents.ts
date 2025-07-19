@@ -1,6 +1,7 @@
 import { Agent, MCPServerStdio } from '@openai/agents';
 import { AgentConfig } from './types';
 import { loadPrompt, validatePrompts, preloadPrompts } from './utils';
+import { createMCPToolCallInterceptor, MCPToolCallInterceptor } from './lib/mcpToolCallInterceptor';
 
 /**
  * Agent factory and configuration module
@@ -11,6 +12,7 @@ import { loadPrompt, validatePrompts, preloadPrompts } from './utils';
  */
 
 let mcpServer: MCPServerStdio | null = null;
+let mcpInterceptor: MCPToolCallInterceptor | null = null;
 
 /**
  * Create and configure the Spotify MCP server connection
@@ -39,11 +41,21 @@ async function createMCPServer(): Promise<MCPServerStdio> {
  * This function initializes both the main Spotify agent and the specialized
  * queue manager agent, connecting them to the MCP server for Spotify API access.
  * 
+ * @param traceCallback - Optional callback for tracing MCP tool calls
+ * @param getSessionId - Optional function to get current session ID
  * @returns Object containing both configured agents
  * @throws Error if MCP server connection fails
  */
-export async function createAgents(): Promise<AgentConfig> {
+export async function createAgents(
+  traceCallback?: (trace: any) => Promise<void>,
+  getSessionId?: () => string
+): Promise<AgentConfig> {
   mcpServer = await createMCPServer();
+  
+  // Setup MCP tool call interceptor if tracing is enabled
+  if (traceCallback && getSessionId) {
+    mcpInterceptor = createMCPToolCallInterceptor(mcpServer, traceCallback, getSessionId);
+  }
   
   // Validate that all required prompts exist
   validatePrompts(['playback-agent', 'lookup-agent']);
@@ -94,4 +106,12 @@ export async function cleanupMCPServer(): Promise<void> {
  */
 export function getMCPServer(): MCPServerStdio | null {
   return mcpServer;
+}
+
+/**
+ * Get the current MCP tool call interceptor instance
+ * @returns Current MCP interceptor or null if not initialized
+ */
+export function getMCPInterceptor(): MCPToolCallInterceptor | null {
+  return mcpInterceptor;
 }

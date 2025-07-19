@@ -1,4 +1,4 @@
-import { run } from '@openai/agents';
+// run function used via runWithToolCallTracing import
 import * as readline from 'readline';
 import * as dotenv from 'dotenv';
 import { UIManager } from './ui';
@@ -10,6 +10,7 @@ import { QueueMonitorService } from './queueMonitor';
 import { createAgents, cleanupMCPServer } from './agents';
 import { CommandRouter, SystemContext } from './tools';
 import { createTraceIntegration } from './lib/traceIntegration';
+import { runWithToolCallTracing } from './lib/toolCallTracer';
 
 dotenv.config();
 
@@ -244,7 +245,10 @@ class ChatBot {
     });
     
     try {
-      agents = await createAgents();
+      agents = await createAgents(
+        async (trace) => await this.traceIntegration.processTraceEvent(trace),
+        () => this.traceIntegration.getCurrentSession().sessionId
+      );
       
       // Update command router context with initialized agents
       const updatedContext: SystemContext = {
@@ -442,8 +446,13 @@ class ChatBot {
       // Create input with conversation context
       const contextualInput = this.conversation.getFormattedHistory() + ' ' + userInput;
       
-      // Use the Playback agent for action requests
-      const result = await run(agents.playback, contextualInput);
+      // Use the Playback agent for action requests with tool call tracing
+      const result = await runWithToolCallTracing(
+        agents.playback, 
+        contextualInput,
+        async (trace) => await this.traceIntegration.processTraceEvent(trace),
+        () => this.traceIntegration.getCurrentSession().sessionId
+      );
       this.ui.stopSpinner();
       
       const response = result.finalOutput || 'No response received';
@@ -506,8 +515,13 @@ class ChatBot {
       // Create input with conversation context
       const contextualInput = this.conversation.getFormattedHistory() + ' ' + userInput;
       
-      // Use the Lookup agent for information requests
-      const result = await run(agents.lookup, contextualInput);
+      // Use the Lookup agent for information requests with tool call tracing
+      const result = await runWithToolCallTracing(
+        agents.lookup, 
+        contextualInput,
+        async (trace) => await this.traceIntegration.processTraceEvent(trace),
+        () => this.traceIntegration.getCurrentSession().sessionId
+      );
       this.ui.stopSpinner();
       
       const response = result.finalOutput || 'No response received';
