@@ -175,7 +175,7 @@ export class UIManager {
    */
   showInfo(message: string): void {
     const formattedMessage = this.parseMarkdownFormatting(message);
-    console.log(chalk.blue('ℹ️  ') + chalk.white(formattedMessage));
+    console.log(chalk.white(formattedMessage));
   }
 
   /**
