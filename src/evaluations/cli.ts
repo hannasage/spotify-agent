@@ -169,7 +169,7 @@ class EvaluationCLI {
     
     // Accuracy metrics
     console.log('\n🎯 ACCURACY METRICS:');
-    console.log(`  • Command Routing Accuracy: ${result.metrics.accuracy.commandRoutingAccuracy.toFixed(1)}%`);
+    console.log(`  • Command Routing Success: ${result.metrics.accuracy.commandRoutingSuccess.toFixed(1)}%`);
     console.log(`  • Lookup Query Relevance: ${result.metrics.accuracy.lookupQueryRelevance.toFixed(1)}%`);
     console.log(`  • Playback Command Success: ${result.metrics.accuracy.playbackCommandSuccess.toFixed(1)}%`);
     console.log(`  • Response Completeness: ${result.metrics.accuracy.responseCompleteness.toFixed(1)}%`);
@@ -232,7 +232,7 @@ class EvaluationCLI {
     const avgScore = results.reduce((sum, r) => sum + r.score, 0) / results.length;
     const avgResponseTime = results.reduce((sum, r) => sum + r.metrics.performance.averageResponseTime, 0) / results.length;
     const avgToolCallSuccess = results.reduce((sum, r) => sum + r.metrics.performance.toolCallSuccessRate, 0) / results.length;
-    const avgRoutingAccuracy = results.reduce((sum, r) => sum + r.metrics.accuracy.commandRoutingAccuracy, 0) / results.length;
+    const avgRoutingSuccess = results.reduce((sum, r) => sum + r.metrics.accuracy.commandRoutingSuccess, 0) / results.length;
     
     // Calculate per-agent averages (only include sessions with non-zero values)
     const systemCommandTimes = results.map(r => r.metrics.performance.agentResponseTimes.systemCommands).filter(t => t > 0);
@@ -262,7 +262,7 @@ class EvaluationCLI {
     console.log(`  • Lookup Agent: ${avgLookupAgentTime.toFixed(0)}ms (${lookupAgentTimes.length} sessions)`);
     console.log(`  • Playback Agent: ${avgPlaybackAgentTime.toFixed(0)}ms (${playbackAgentTimes.length} sessions)`);
     console.log(`  • Average Tool Call Success Rate: ${avgToolCallSuccess.toFixed(1)}%`);
-    console.log(`  • Average Routing Accuracy: ${avgRoutingAccuracy.toFixed(1)}%`);
+    console.log(`  • Average Routing Success: ${avgRoutingSuccess.toFixed(1)}%`);
     
     console.log(`\n📈 GRADE DISTRIBUTION:`);
     Object.entries(gradeDistribution).forEach(([grade, count]) => {

@@ -46,7 +46,7 @@ export interface EvaluationMetrics {
   
   // Accuracy metrics
   accuracy: {
-    commandRoutingAccuracy: number; // percentage of correct routing decisions
+    commandRoutingSuccess: number; // percentage of successful routing decisions
     lookupQueryRelevance: number; // percentage of relevant search results
     playbackCommandSuccess: number; // percentage of successful playback commands
     responseCompleteness: number; // percentage of complete responses
@@ -151,7 +151,7 @@ export interface EvaluationCriteria {
   
   // Accuracy thresholds
   accuracyThresholds: {
-    minRoutingAccuracy: number; // percentage
+    minRoutingSuccess: number; // percentage
     minQueryRelevance: number; // percentage
     minPlaybackSuccess: number; // percentage
   };
@@ -283,7 +283,7 @@ export const DEFAULT_EVALUATION_CRITERIA: EvaluationCriteria = {
     maxAgentExecutionTime: 10000, // 10 seconds
   },
   accuracyThresholds: {
-    minRoutingAccuracy: 90, // 90%
+    minRoutingSuccess: 90, // 90%
     minQueryRelevance: 85, // 85%
     minPlaybackSuccess: 95, // 95%
   },

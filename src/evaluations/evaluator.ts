@@ -246,7 +246,7 @@ export class SpotifyAgentEvaluator {
     const responseCompleteness = 90; // Placeholder - would need content analysis
 
     return {
-      commandRoutingAccuracy: routingAccuracy,
+      commandRoutingSuccess: routingAccuracy,
       lookupQueryRelevance: queryRelevance,
       playbackCommandSuccess: playbackSuccess,
       responseCompleteness: responseCompleteness
@@ -574,7 +574,7 @@ export class SpotifyAgentEvaluator {
    */
   private calculateAccuracyScore(accuracy: EvaluationMetrics['accuracy']): number {
     return (
-      accuracy.commandRoutingAccuracy +
+      accuracy.commandRoutingSuccess +
       accuracy.lookupQueryRelevance +
       accuracy.playbackCommandSuccess +
       accuracy.responseCompleteness
@@ -626,7 +626,7 @@ export class SpotifyAgentEvaluator {
       recommendations.push('Consider optimizing response times by reducing tool call latency');
     }
 
-    if (result.metrics.accuracy.commandRoutingAccuracy < 90) {
+    if (result.metrics.accuracy.commandRoutingSuccess < 90) {
       recommendations.push('Improve command routing accuracy by enhancing the router model');
     }
 
@@ -655,7 +655,7 @@ export class SpotifyAgentEvaluator {
       issues.push('Response times are too slow (>5s)');
     }
 
-    if (result.metrics.accuracy.commandRoutingAccuracy < 80) {
+    if (result.metrics.accuracy.commandRoutingSuccess < 80) {
       issues.push('Command routing accuracy is below acceptable threshold');
     }
 
