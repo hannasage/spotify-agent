@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { debug } from '../debug';
+import { APP_METADATA } from '../constants';
 
 /**
  * Custom trace processor that saves traces to a single file per run
@@ -9,16 +10,20 @@ import { debug } from '../debug';
  * in a structured format for debugging and analysis.
  */
 export class CustomTraceProcessor {
-  private tracesDir: string;
+  private baseTracesDir: string;
+  private versionTracesDir: string;
   private currentTraceFile: string;
   private traces: any[] = [];
   private sessionId: string;
+  private version: string;
 
-  constructor(tracesDir: string = '/data/traces') {
-    this.tracesDir = tracesDir;
+  constructor(tracesDir: string = './data/traces') {
+    this.baseTracesDir = tracesDir;
+    this.version = APP_METADATA.VERSION;
+    this.versionTracesDir = path.join(this.baseTracesDir, this.version);
     this.sessionId = this.generateSessionId();
     this.currentTraceFile = this.getTraceFileName();
-    this.ensureTracesDirectory();
+    this.ensureVersionTracesDirectory();
   }
 
   /**
@@ -37,25 +42,32 @@ export class CustomTraceProcessor {
   }
 
   /**
-   * Ensure the traces directory exists
+   * Ensure the version-specific traces directory exists
    */
-  private ensureTracesDirectory(): void {
+  private ensureVersionTracesDirectory(): void {
     try {
-      if (!fs.existsSync(this.tracesDir)) {
-        fs.mkdirSync(this.tracesDir, { recursive: true });
-        console.log(`Created traces directory: ${this.tracesDir}`);
+      // Create base traces directory if it doesn't exist
+      if (!fs.existsSync(this.baseTracesDir)) {
+        fs.mkdirSync(this.baseTracesDir, { recursive: true });
+        console.log(`Created base traces directory: ${this.baseTracesDir}`);
+      }
+      
+      // Create version-specific directory if it doesn't exist
+      if (!fs.existsSync(this.versionTracesDir)) {
+        fs.mkdirSync(this.versionTracesDir, { recursive: true });
+        console.log(`Created version traces directory: ${this.versionTracesDir}`);
       }
     } catch (error) {
-      console.error(`Failed to create traces directory ${this.tracesDir}:`, error);
+      console.error(`Failed to create traces directory ${this.versionTracesDir}:`, error);
     }
   }
 
   /**
-   * Write traces to file
+   * Write traces to file in version-specific directory
    */
   private writeTracesToFile(): void {
     try {
-      const filepath = path.join(this.tracesDir, this.currentTraceFile);
+      const filepath = path.join(this.versionTracesDir, this.currentTraceFile);
       const traceData = {
         sessionId: this.sessionId,
         sessionStartTime: new Date().toISOString(),
@@ -64,8 +76,9 @@ export class CustomTraceProcessor {
         traces: this.traces,
         metadata: {
           processor: 'CustomTraceProcessor',
-          version: '1.0.0',
-          format: 'single_file_per_session'
+          version: this.version,
+          format: 'single_file_per_session',
+          appVersion: this.version
         }
       };
 
@@ -113,7 +126,7 @@ export class CustomTraceProcessor {
    * Get information about the trace processor
    */
   getInfo(): string {
-    return `CustomTraceProcessor - Saves traces to ${this.tracesDir} (${this.traces.length} traces in current session)`;
+    return `CustomTraceProcessor v${this.version} - Saves traces to ${this.versionTracesDir} (${this.traces.length} traces in current session)`;
   }
 
   /**
@@ -124,10 +137,24 @@ export class CustomTraceProcessor {
   }
 
   /**
-   * Get the current trace file name
+   * Get the current trace file path (including version directory)
    */
   getCurrentTraceFile(): string {
-    return this.currentTraceFile;
+    return path.join(this.versionTracesDir, this.currentTraceFile);
+  }
+
+  /**
+   * Get the current version
+   */
+  getVersion(): string {
+    return this.version;
+  }
+
+  /**
+   * Get the version-specific traces directory
+   */
+  getVersionTracesDir(): string {
+    return this.versionTracesDir;
   }
 
   /**
@@ -135,7 +162,7 @@ export class CustomTraceProcessor {
    */
   getCurrentSessionStats(): { sessionId: string; traceCount: number; fileSize: number } {
     try {
-      const filepath = path.join(this.tracesDir, this.currentTraceFile);
+      const filepath = path.join(this.versionTracesDir, this.currentTraceFile);
       const stats = fs.statSync(filepath);
       return {
         sessionId: this.sessionId,
@@ -158,16 +185,19 @@ export class CustomTraceProcessor {
    */
   async cleanupOldTraces(maxAgeInDays: number = 7): Promise<void> {
     try {
-      const files = fs.readdirSync(this.tracesDir);
-      const cutoffTime = Date.now() - (maxAgeInDays * 24 * 60 * 60 * 1000);
+      // Clean up files in the current version directory
+      if (fs.existsSync(this.versionTracesDir)) {
+        const files = fs.readdirSync(this.versionTracesDir);
+        const cutoffTime = Date.now() - (maxAgeInDays * 24 * 60 * 60 * 1000);
 
-      for (const file of files) {
-        const filepath = path.join(this.tracesDir, file);
-        const stats = fs.statSync(filepath);
-        
-        if (stats.mtime.getTime() < cutoffTime) {
-          fs.unlinkSync(filepath);
-          console.log(`Deleted old trace file: ${file}`);
+        for (const file of files) {
+          const filepath = path.join(this.versionTracesDir, file);
+          const stats = fs.statSync(filepath);
+          
+          if (stats.mtime.getTime() < cutoffTime) {
+            fs.unlinkSync(filepath);
+            console.log(`Deleted old trace file: ${file} (${this.version})`);
+          }
         }
       }
     } catch (error) {
@@ -180,15 +210,20 @@ export class CustomTraceProcessor {
    */
   getTraceStats(): { totalFiles: number; totalSize: number; oldestFile?: string; newestFile?: string; currentSession: { sessionId: string; traceCount: number; fileSize: number } } {
     try {
-      const files = fs.readdirSync(this.tracesDir);
       let totalSize = 0;
       let oldestFile: string | undefined;
       let newestFile: string | undefined;
       let oldestTime = Date.now();
       let newestTime = 0;
+      let files: string[] = [];
+
+      // Get files from current version directory
+      if (fs.existsSync(this.versionTracesDir)) {
+        files = fs.readdirSync(this.versionTracesDir);
+      }
 
       for (const file of files) {
-        const filepath = path.join(this.tracesDir, file);
+        const filepath = path.join(this.versionTracesDir, file);
         const stats = fs.statSync(filepath);
         
         totalSize += stats.size;

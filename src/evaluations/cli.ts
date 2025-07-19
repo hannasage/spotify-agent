@@ -10,6 +10,7 @@
 import * as fs from 'fs';
 import { SpotifyAgentEvaluator } from './evaluator';
 import { EvaluationResult } from './schema';
+import { APP_METADATA } from '../constants';
 
 class EvaluationCLI {
   private evaluator: SpotifyAgentEvaluator;
@@ -37,6 +38,15 @@ class EvaluationCLI {
         break;
       case 'evaluate-all':
         await this.evaluateAllSessions(args.slice(1));
+        break;
+      case 'evaluate-version':
+        await this.evaluateVersion(args.slice(1));
+        break;
+      case 'evaluate-all-versions':
+        await this.evaluateAllVersions(args.slice(1));
+        break;
+      case 'compare-versions':
+        await this.compareVersions(args.slice(1));
         break;
       case 'summary':
         await this.generateSummary(args.slice(1));
@@ -310,6 +320,252 @@ class EvaluationCLI {
   }
 
   /**
+   * Evaluate all sessions in a specific version directory
+   */
+  async evaluateVersion(args: string[]): Promise<void> {
+    // Check for --current flag
+    const hasCurrentFlag = args.includes('--current');
+    
+    let version: string;
+    let baseTracesDir: string;
+    
+    if (hasCurrentFlag) {
+      version = APP_METADATA.VERSION;
+      // Remove --current flag from args and get base directory if provided
+      const filteredArgs = args.filter(arg => arg !== '--current');
+      baseTracesDir = filteredArgs[0] || './data/traces';
+    } else {
+      if (args.length === 0) {
+        console.error('Usage: evaluate-version <version|--current> [base-traces-dir]');
+        console.error('Examples:');
+        console.error('  evaluate-version v1.1');
+        console.error('  evaluate-version --current');
+        console.error('  evaluate-version --current ./custom/traces');
+        process.exit(1);
+      }
+      version = args[0]!;
+      baseTracesDir = args[1] || './data/traces';
+    }
+
+    const versionDir = `${baseTracesDir}/${version}`;
+    
+    try {
+      const versionLabel = hasCurrentFlag ? `${version} (current)` : version;
+      console.log(`🔍 Evaluating version ${versionLabel} from: ${versionDir}`);
+      
+      if (!fs.existsSync(versionDir)) {
+        console.error(`❌ Version directory does not exist: ${versionDir}`);
+        if (hasCurrentFlag) {
+          console.error(`💡 Hint: Current version is ${version}. Try running the app first to generate traces.`);
+        }
+        process.exit(1);
+      }
+
+      const allTraceData = this.evaluator.loadAllTraceData(versionDir);
+      const results: EvaluationResult[] = [];
+      
+      for (const traceData of allTraceData) {
+        const result = this.evaluator.evaluateSession(traceData);
+        results.push(result);
+      }
+      
+      console.log(`\n📊 VERSION ${version?.toUpperCase()} EVALUATION RESULTS`);
+      this.printSummaryResults(results);
+      
+    } catch (error) {
+      console.error(`❌ Error evaluating version ${version}: ${error}`);
+      process.exit(1);
+    }
+  }
+
+  /**
+   * Evaluate all versions
+   */
+  async evaluateAllVersions(args: string[]): Promise<void> {
+    const baseTracesDir = args[0] || './data/traces';
+    
+    try {
+      console.log(`🔍 Evaluating all versions from: ${baseTracesDir}`);
+      
+      if (!fs.existsSync(baseTracesDir)) {
+        console.error(`❌ Base traces directory does not exist: ${baseTracesDir}`);
+        process.exit(1);
+      }
+
+      // Find all version directories
+      const entries = fs.readdirSync(baseTracesDir, { withFileTypes: true });
+      const versionDirs = entries
+        .filter(entry => entry.isDirectory() && entry.name.startsWith('v'))
+        .map(entry => entry.name)
+        .sort();
+
+      if (versionDirs.length === 0) {
+        console.error('❌ No version directories found');
+        process.exit(1);
+      }
+
+      for (const version of versionDirs) {
+        const versionDir = `${baseTracesDir}/${version}`;
+        console.log(`\n${'='.repeat(60)}`);
+        console.log(`📊 EVALUATING VERSION ${version.toUpperCase()}`);
+        console.log(`${'='.repeat(60)}`);
+        
+        const allTraceData = this.evaluator.loadAllTraceData(versionDir);
+        const results: EvaluationResult[] = [];
+        
+        for (const traceData of allTraceData) {
+          const result = this.evaluator.evaluateSession(traceData);
+          results.push(result);
+        }
+        
+        this.printSummaryResults(results);
+      }
+      
+    } catch (error) {
+      console.error(`❌ Error evaluating all versions: ${error}`);
+      process.exit(1);
+    }
+  }
+
+  /**
+   * Compare two versions
+   */
+  async compareVersions(args: string[]): Promise<void> {
+    if (args.length < 2) {
+      console.error('Usage: compare-versions <version1> <version2> [base-traces-dir]');
+      process.exit(1);
+    }
+
+    const version1 = args[0];
+    const version2 = args[1];
+    const baseTracesDir = args[2] || './data/traces';
+    
+    try {
+      console.log(`🔍 Comparing ${version1} vs ${version2}`);
+      
+      // Evaluate both versions
+      const v1Dir = `${baseTracesDir}/${version1}`;
+      const v2Dir = `${baseTracesDir}/${version2}`;
+      
+      if (!fs.existsSync(v1Dir)) {
+        console.error(`❌ Version ${version1} directory does not exist: ${v1Dir}`);
+        process.exit(1);
+      }
+      
+      if (!fs.existsSync(v2Dir)) {
+        console.error(`❌ Version ${version2} directory does not exist: ${v2Dir}`);
+        process.exit(1);
+      }
+
+      const v1TraceData = this.evaluator.loadAllTraceData(v1Dir);
+      const v2TraceData = this.evaluator.loadAllTraceData(v2Dir);
+      
+      const v1Results: EvaluationResult[] = [];
+      const v2Results: EvaluationResult[] = [];
+      
+      for (const traceData of v1TraceData) {
+        v1Results.push(this.evaluator.evaluateSession(traceData));
+      }
+      
+      for (const traceData of v2TraceData) {
+        v2Results.push(this.evaluator.evaluateSession(traceData));
+      }
+      
+      this.printVersionComparison(version1!, v1Results, version2!, v2Results);
+      
+    } catch (error) {
+      console.error(`❌ Error comparing versions: ${error}`);
+      process.exit(1);
+    }
+  }
+
+  /**
+   * Print version comparison
+   */
+  private printVersionComparison(
+    v1: string, 
+    v1Results: EvaluationResult[], 
+    v2: string, 
+    v2Results: EvaluationResult[]
+  ): void {
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`📊 VERSION COMPARISON: ${v1.toUpperCase()} vs ${v2.toUpperCase()}`);
+    console.log(`${'='.repeat(60)}`);
+    
+    if (v1Results.length === 0 || v2Results.length === 0) {
+      console.log('❌ Cannot compare: One or both versions have no data');
+      return;
+    }
+
+    // Calculate averages for v1
+    const v1AvgScore = v1Results.reduce((sum, r) => sum + r.score, 0) / v1Results.length;
+    const v1AvgResponseTime = v1Results.reduce((sum, r) => sum + r.metrics.performance.averageResponseTime, 0) / v1Results.length;
+    const v1AvgSystemTime = this.getAvgAgentTime(v1Results, 'systemCommands');
+    const v1AvgLookupTime = this.getAvgAgentTime(v1Results, 'lookupAgent');
+    const v1AvgPlaybackTime = this.getAvgAgentTime(v1Results, 'playbackAgent');
+
+    // Calculate averages for v2
+    const v2AvgScore = v2Results.reduce((sum, r) => sum + r.score, 0) / v2Results.length;
+    const v2AvgResponseTime = v2Results.reduce((sum, r) => sum + r.metrics.performance.averageResponseTime, 0) / v2Results.length;
+    const v2AvgSystemTime = this.getAvgAgentTime(v2Results, 'systemCommands');
+    const v2AvgLookupTime = this.getAvgAgentTime(v2Results, 'lookupAgent');
+    const v2AvgPlaybackTime = this.getAvgAgentTime(v2Results, 'playbackAgent');
+
+    // Calculate changes
+    const scoreChange = v2AvgScore - v1AvgScore;
+    const responseTimeChange = v2AvgResponseTime - v1AvgResponseTime;
+    const systemTimeChange = v2AvgSystemTime - v1AvgSystemTime;
+    const lookupTimeChange = v2AvgLookupTime - v1AvgLookupTime;
+    const playbackTimeChange = v2AvgPlaybackTime - v1AvgPlaybackTime;
+
+    console.log(`\n🎯 PERFORMANCE CHANGES:`);
+    console.log(`  • Overall Score: ${v1AvgScore.toFixed(1)} → ${v2AvgScore.toFixed(1)} (${this.formatChange(scoreChange, 1, true)} ${this.getChangeIcon(scoreChange, true)})`);
+    console.log(`  • Overall Response Time: ${v1AvgResponseTime.toFixed(0)}ms → ${v2AvgResponseTime.toFixed(0)}ms (${this.formatChange(responseTimeChange, 0)} ${this.getChangeIcon(responseTimeChange, false)})`);
+    
+    if (v1AvgSystemTime > 0 && v2AvgSystemTime > 0) {
+      console.log(`  • System Commands: ${v1AvgSystemTime.toFixed(0)}ms → ${v2AvgSystemTime.toFixed(0)}ms (${this.formatChange(systemTimeChange, 0)} ${this.getChangeIcon(systemTimeChange, false)})`);
+    }
+    
+    if (v1AvgLookupTime > 0 && v2AvgLookupTime > 0) {
+      console.log(`  • Lookup Agent: ${v1AvgLookupTime.toFixed(0)}ms → ${v2AvgLookupTime.toFixed(0)}ms (${this.formatChange(lookupTimeChange, 0)} ${this.getChangeIcon(lookupTimeChange, false)})`);
+    }
+    
+    if (v1AvgPlaybackTime > 0 && v2AvgPlaybackTime > 0) {
+      console.log(`  • Playback Agent: ${v1AvgPlaybackTime.toFixed(0)}ms → ${v2AvgPlaybackTime.toFixed(0)}ms (${this.formatChange(playbackTimeChange, 0)} ${this.getChangeIcon(playbackTimeChange, false)})`);
+    }
+
+    console.log(`\n📊 SESSION COUNTS:`);
+    console.log(`  • ${v1}: ${v1Results.length} sessions`);
+    console.log(`  • ${v2}: ${v2Results.length} sessions`);
+  }
+
+  /**
+   * Get average agent time for a specific agent type
+   */
+  private getAvgAgentTime(results: EvaluationResult[], agentType: 'systemCommands' | 'lookupAgent' | 'playbackAgent'): number {
+    const times = results.map(r => r.metrics.performance.agentResponseTimes[agentType]).filter(t => t > 0);
+    return times.length > 0 ? times.reduce((sum, t) => sum + t, 0) / times.length : 0;
+  }
+
+  /**
+   * Format change value with percentage
+   */
+  private formatChange(change: number, decimals: number, _isHigherBetter: boolean = false): string {
+    const sign = change >= 0 ? '+' : '';
+    return `${sign}${change.toFixed(decimals)}`;
+  }
+
+  /**
+   * Get change icon (✓ for improvement, ⚠ for regression)
+   */
+  private getChangeIcon(change: number, isHigherBetter: boolean = false): string {
+    if (Math.abs(change) < 0.1) return '→'; // No significant change
+    
+    const isImprovement = isHigherBetter ? change > 0 : change < 0;
+    return isImprovement ? '✓' : '⚠️';
+  }
+
+  /**
    * Show help information
    */
   private showHelp(): void {
@@ -319,14 +575,21 @@ class EvaluationCLI {
 Usage: node cli.js <command> [options]
 
 Commands:
-  evaluate <trace-file>     Evaluate a single session from trace file
-  evaluate-all [dir]        Evaluate all sessions in directory (default: ./data/traces)
-  summary [dir] [output]    Generate summary report (optional output file)
+  evaluate <trace-file>                     Evaluate a single session from trace file
+  evaluate-all [dir]                        Evaluate all sessions in directory (default: ./data/traces)
+  evaluate-version <version|--current> [base-dir]  Evaluate all sessions for a specific version or current version
+  evaluate-all-versions [base-dir]          Evaluate all versions separately  
+  compare-versions <v1> <v2> [base-dir]     Compare performance between two versions
+  summary [dir] [output]                    Generate summary report (optional output file)
 
 Examples:
-  node cli.js evaluate ./data/traces/session_123.json
-  node cli.js evaluate-all ./data/traces
-  node cli.js summary ./data/traces report.json
+  node cli.js evaluate ./data/traces/v1.1/session_123.json
+  node cli.js evaluate-all ./data/traces/v1.1
+  node cli.js evaluate-version v1.1
+  node cli.js evaluate-version --current
+  node cli.js evaluate-all-versions
+  node cli.js compare-versions v1.0 v1.1
+  node cli.js summary ./data/traces/v1.1 report.json
 
 Options:
   --help, -h               Show this help message
