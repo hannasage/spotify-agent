@@ -96,3 +96,4 @@ jspm_packages/
 .tern-port
 
 song-history.json
+data/

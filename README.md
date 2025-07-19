@@ -99,22 +99,70 @@ npm start
 
 ## Architecture
 
-### Multi-Agent System
-- **Spotify Assistant**: Primary agent handling user interaction and music control
+### Enhanced Multi-Agent System
+- **Spotify Assistant**: Primary agent handling user interaction and music control with integrated tracing
 - **Queue Manager**: Specialized agent for intelligent music curation and queue management
-- **Command Router**: Routes natural language to appropriate tools and agents
+- **Command Router**: Routes natural language to appropriate tools and agents with performance monitoring
+- **MCP Tool Call Interceptor**: Real-time monitoring of all Spotify API interactions
+- **Tool Call Tracer**: Comprehensive agent execution tracking and performance analysis
 
 ### Key Components
 - **Song Pool Manager**: Intelligent song selection from your library
 - **Queue Monitor**: Autonomous queue management with anti-repetition
 - **History Tracker**: Persistent track history to avoid repetition
 - **Tool Registry**: Modular system for extending functionality
+- **Performance Evaluation**: Real-time trace collection and system analysis
+- **Tool Call Interceptor**: Detailed MCP tool call monitoring and metrics
 
 ### Technology Stack
 - **OpenAI Agents SDK**: Multi-agent orchestration
 - **Model Context Protocol (MCP)**: AI-to-API communication
 - **TypeScript**: Type-safe development
 - **Spotify Web API**: Music control and library access
+- **Evaluation System**: Comprehensive performance tracking and analysis
+
+## Evaluation System
+
+### Performance Monitoring
+The Spotify Agent includes a comprehensive evaluation system for tracking performance, accuracy, and user experience metrics:
+
+```bash
+# Run evaluations on collected trace data
+npm run eval
+
+# Example evaluation output:
+📊 SPOTIFY AGENT EVALUATION REPORT
+Session: session_2025_07_19_152437
+Grade: A (Score: 92.3/100)
+
+🎯 Performance Metrics:
+• Average Response Time: 1.2s
+• Tool Call Success Rate: 98.5%
+• Agent Execution Time: 850ms
+
+🎵 Accuracy Metrics:
+• Command Routing: 94.2%
+• Playback Success: 96.8%
+• Query Relevance: 89.3%
+
+👤 User Experience:
+• Session Duration: 180s
+• Interactions: 12
+• Conversation Flow: 8.5/10
+```
+
+### Trace Collection
+Real-time monitoring captures detailed execution traces:
+- **MCP Tool Calls**: Spotify API interactions with timing and success rates
+- **Agent Executions**: Multi-agent coordination and decision-making
+- **User Interactions**: Input classification and response quality
+- **System Health**: Error rates, connection stability, and performance
+
+### Evaluation Dimensions
+- **Routing**: Input classification accuracy and agent selection
+- **Tool Calls**: MCP server interaction performance and reliability
+- **Agents**: Individual agent execution metrics and success rates
+- **Interactions**: User experience quality and conversation flow
 
 ## Development
 
@@ -129,6 +177,14 @@ src/
 │   ├── poolTools.ts
 │   ├── historyTools.ts
 │   └── systemTools.ts
+├── evaluations/       # Performance evaluation system
+│   ├── evaluator.ts   # Comprehensive metrics analysis
+│   ├── schema.ts      # Evaluation data structures
+│   ├── cli.ts         # Evaluation CLI interface
+│   └── index.ts       # Evaluation system exports
+├── lib/               # Enhanced system libraries
+│   ├── toolCallTracer.ts      # Agent tool call tracing
+│   └── mcpToolCallInterceptor.ts  # MCP tool call monitoring
 ├── ui.ts              # Rich CLI interface
 └── types.ts           # TypeScript definitions
 ```
@@ -140,12 +196,20 @@ npm run dev            # Development mode with auth
 npm run debug          # Debug mode with verbose logging
 npm start              # Production mode
 npm run clean          # Clean build artifacts
+npm run eval           # Run evaluation system on trace data
 ```
+
+### Development Features
+- **Enhanced Debugging**: Comprehensive trace collection with MCP tool call interception
+- **Performance Monitoring**: Real-time metrics on agent execution and tool call success rates
+- **Evaluation Framework**: Automated analysis of system performance with graded reports
+- **Error Tracking**: Detailed error capture and recovery analysis
 
 ### Adding New Tools
 1. Create a new tool class extending `BaseTool`
 2. Register it in `src/tools/registry.ts`
 3. Add appropriate agent instructions
+4. Tool calls will be automatically traced and included in evaluation reports
 
 ## Contributing
 
@@ -157,6 +221,9 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 - Web interface development
 - Mobile app development
 - Playlist generation features
+- Advanced evaluation metrics and analysis
+- Machine learning-based performance optimization
+- Custom trace collection and visualization tools
 
 ## License
 

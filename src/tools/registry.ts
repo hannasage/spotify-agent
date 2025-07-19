@@ -3,9 +3,8 @@
  */
 
 import { SystemTool } from './types';
-import { StartAutoQueueTool, StopAutoQueueTool, AutoQueueStatusTool } from './autoQueueTools';
-import { ShowPoolStatsTool, RefreshPoolTool } from './poolTools';
-import { ShowSongHistoryTool, ClearSongHistoryTool } from './historyTools';
+import { StartAutoQueueTool, StopAutoQueueTool, AutoQueueStatusTool, ShowPoolStatsTool, RefreshPoolTool } from './playbackTools';
+import { ShowSongHistoryTool, ClearSongHistoryTool } from './lookupTools';
 import { ShowHelpTool, ClearConversationTool, ShowConversationHistoryTool, ShowAgentStatusTool } from './systemTools';
 
 /**
@@ -22,16 +21,14 @@ export class ToolRegistry {
    * Register all default system tools
    */
   private registerDefaultTools(): void {
-    // Auto-queue tools
+    // Playback tools
     this.register(new StartAutoQueueTool());
     this.register(new StopAutoQueueTool());
     this.register(new AutoQueueStatusTool());
-
-    // Pool management tools
     this.register(new ShowPoolStatsTool());
     this.register(new RefreshPoolTool());
 
-    // History tools
+    // Lookup tools
     this.register(new ShowSongHistoryTool());
     this.register(new ClearSongHistoryTool());
 

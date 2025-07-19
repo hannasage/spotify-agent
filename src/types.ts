@@ -1,10 +1,19 @@
 /**
  * Type definitions for the Spotify Agent application
+ * 
+ * This module contains all the core type definitions used throughout
+ * the application, including conversation management, music data structures,
+ * and agent configuration interfaces.
  */
 
-/** Represents a single message in the conversation history */
+/** 
+ * Represents a single message in the conversation history
+ * 
+ * Used to track the back-and-forth conversation between the user
+ * and the agents to maintain context across interactions.
+ */
 export interface ConversationMessage {
-  /** Role of the message sender */
+  /** Role of the message sender (user or AI assistant) */
   role: 'user' | 'assistant';
   /** Content of the message */
   content: string;
@@ -65,11 +74,18 @@ export interface ConnectionStatusConfig {
 /** Status types for connection display */
 export type ConnectionStatus = 'connecting' | 'connected' | 'error';
 
-/** Agent configuration structure */
+/** 
+ * Agent configuration structure
+ * 
+ * Contains the two main agents used in the multi-agent system:
+ * - Playback Agent: Handles music playback actions
+ * - Lookup Agent: Handles information retrieval
+ */
 export interface AgentConfig {
-  /** Collection of created agents */
-  spotify: import('@openai/agents').Agent;
-  queue: import('@openai/agents').Agent;
+  /** Playback agent for executing music actions */
+  playback: import('@openai/agents').Agent;
+  /** Lookup agent for retrieving music information */
+  lookup: import('@openai/agents').Agent;
 }
 
 /** Auto-queue monitor state */

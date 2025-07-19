@@ -2,6 +2,12 @@
  * Application constants and configuration values
  */
 
+// Application metadata
+export const APP_METADATA = {
+  /** Current application version for tracing and evals */
+  VERSION: 'v1.1',
+} as const;
+
 // Auto-queue system configuration
 export const AUTO_QUEUE = {
   /** Number of songs to add per auto-queue cycle */
