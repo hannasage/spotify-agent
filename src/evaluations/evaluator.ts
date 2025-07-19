@@ -118,6 +118,11 @@ export class SpotifyAgentEvaluator {
 
     // Calculate tool call metrics
     const toolCallDurations: number[] = [];
+    
+    // Count tool call starts (total attempts)
+    const toolCallStarts = toolCalls.filter(trace => trace.type.includes('start')).length;
+    
+    // Count successful tool calls (end events without errors)
     const successfulToolCalls = toolCalls.filter(trace => 
       trace.type.includes('end') && !trace.type.includes('error')
     ).length;
@@ -136,7 +141,7 @@ export class SpotifyAgentEvaluator {
       averageToolCallDuration: toolCallDurations.length > 0 
         ? toolCallDurations.reduce((sum, duration) => sum + duration, 0) / toolCallDurations.length 
         : 0,
-      toolCallSuccessRate: toolCalls.length > 0 ? (successfulToolCalls / toolCalls.length) * 100 : 0,
+      toolCallSuccessRate: toolCallStarts > 0 ? (successfulToolCalls / toolCallStarts) * 100 : 0,
       agentExecutionTime: this.calculateAgentExecutionTime(agentExecutions)
     };
   }
@@ -147,12 +152,15 @@ export class SpotifyAgentEvaluator {
   private calculateAccuracyMetrics(traces: TraceEntry[]): EvaluationMetrics['accuracy'] {
     const lookupSuccesses = TraceAnalysisUtils.getTracesByType(traces, 'lookup_interaction_success');
     const playbackSuccesses = TraceAnalysisUtils.getTracesByType(traces, 'playback_interaction_success');
-    const allInteractions = TraceAnalysisUtils.extractAgentExecutions(traces);
-
-    // Estimate routing accuracy based on successful interactions
-    const totalInteractions = allInteractions.length;
+    
+    // Count interaction starts (total attempts)
+    const lookupStarts = TraceAnalysisUtils.getTracesByType(traces, 'lookup_interaction_start');
+    const playbackStarts = TraceAnalysisUtils.getTracesByType(traces, 'playback_interaction_start');
+    const totalInteractionAttempts = lookupStarts.length + playbackStarts.length;
+    
+    // Count successful interactions
     const successfulInteractions = lookupSuccesses.length + playbackSuccesses.length;
-    const routingAccuracy = totalInteractions > 0 ? (successfulInteractions / totalInteractions) * 100 : 0;
+    const routingAccuracy = totalInteractionAttempts > 0 ? (successfulInteractions / totalInteractionAttempts) * 100 : 0;
 
     // Estimate query relevance (simplified - could be enhanced with more sophisticated analysis)
     const queryRelevance = 85; // Placeholder - would need more sophisticated analysis
