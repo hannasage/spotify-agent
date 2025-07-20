@@ -175,7 +175,7 @@ export class UIManager {
    */
   showInfo(message: string): void {
     const formattedMessage = this.parseMarkdownFormatting(message);
-    console.log(chalk.blue('ℹ️  ') + chalk.white(formattedMessage));
+    console.log(chalk.white(formattedMessage));
   }
 
   /**
@@ -253,6 +253,8 @@ export class UIManager {
       chalk.white('  /clear-history-songs') + chalk.gray('       - Clear song history'),
       chalk.white('  /pool-stats') + chalk.gray('              - Show song pool statistics'),
       chalk.white('  /refresh-pool') + chalk.gray('            - Force refresh song pool'),
+      chalk.white('  /traces') + chalk.gray('                  - Show trace statistics'),
+      chalk.white('  /cleanup-traces') + chalk.gray('           - Clean up old trace files'),
       chalk.white('  exit') + chalk.gray('                    - Quit the application'),
       '',
       chalk.green('💡 Tips:'),
