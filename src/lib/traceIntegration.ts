@@ -81,12 +81,88 @@ export class TraceIntegration {
 }
 
 /**
+ * No-op trace integration that provides the same interface but does nothing
+ * Used when --no-trace flag is enabled for performance during development
+ */
+export class NoOpTraceIntegration {
+  /**
+   * Initialize trace processing (no-op)
+   */
+  async initialize(): Promise<void> {
+    // No-op: Skip trace initialization
+  }
+
+  /**
+   * Process a trace event (no-op)
+   */
+  async processTraceEvent(_event: any): Promise<void> {
+    // No-op: Skip trace processing
+  }
+
+  /**
+   * Get trace statistics (returns empty stats)
+   */
+  getStats() {
+    return {
+      totalFiles: 0,
+      totalSize: 0,
+      oldestFile: undefined,
+      newestFile: undefined,
+      currentSession: {
+        sessionId: 'no-trace-session',
+        traceCount: 0,
+        fileSize: 0
+      }
+    };
+  }
+
+  /**
+   * Get current session information (returns minimal data)
+   */
+  getCurrentSession() {
+    return {
+      sessionId: 'no-trace-session',
+      traceFile: 'traces-disabled',
+      stats: {
+        traceCount: 0,
+        fileSize: 0
+      }
+    };
+  }
+
+  /**
+   * Clean up old trace files (no-op)
+   */
+  async cleanupOldTraces(_maxAgeInDays: number = 7): Promise<void> {
+    // No-op: No files to clean up
+  }
+
+  /**
+   * Flush current traces to file (no-op)
+   */
+  async flush(): Promise<void> {
+    // No-op: Nothing to flush
+  }
+
+  /**
+   * Get information about the trace integration
+   */
+  getInfo(): string {
+    return 'No-op trace integration (tracing disabled with --no-trace flag)';
+  }
+}
+
+/**
  * Factory function to create trace integration
  * 
  * @param tracesDir - Directory to save traces (default: /data/traces)
- * @returns TraceIntegration instance
+ * @param enableTracing - Whether to enable tracing (default: true)
+ * @returns TraceIntegration instance or NoOpTraceIntegration if tracing is disabled
  */
-export function createTraceIntegration(tracesDir?: string): TraceIntegration {
+export function createTraceIntegration(tracesDir?: string, enableTracing: boolean = true): TraceIntegration | NoOpTraceIntegration {
+  if (!enableTracing) {
+    return new NoOpTraceIntegration();
+  }
   return new TraceIntegration(tracesDir);
 }
 

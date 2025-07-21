@@ -11,6 +11,7 @@ import { createAgents, cleanupMCPServer } from './agents';
 import { CommandRouter, SystemContext } from './tools';
 import { createTraceIntegration } from './lib/traceIntegration';
 import { runWithToolCallTracing } from './lib/toolCallTracer';
+import { run } from '@openai/agents';
 
 dotenv.config();
 
@@ -37,9 +38,9 @@ class ChatBot {
     this.conversation = new ConversationSession();
     this.queueMonitor = new QueueMonitorService(this.ui, this.conversation);
     
-    // Initialize trace integration
+    // Initialize trace integration (conditionally based on --no-trace flag)
     const traceDir = process.env.TRACE_DIRECTORY || './data/traces';
-    this.traceIntegration = createTraceIntegration(traceDir);
+    this.traceIntegration = createTraceIntegration(traceDir, debug.isTracingEnabled());
     
     // Initialize command router with system context
     const systemContext: SystemContext = {
@@ -245,10 +246,13 @@ class ChatBot {
     });
     
     try {
-      agents = await createAgents(
-        async (trace) => await this.traceIntegration.processTraceEvent(trace),
-        () => this.traceIntegration.getCurrentSession().sessionId
-      );
+      // Only pass trace callbacks if tracing is enabled
+      agents = debug.isTracingEnabled() 
+        ? await createAgents(
+            async (trace) => await this.traceIntegration.processTraceEvent(trace),
+            () => this.traceIntegration.getCurrentSession().sessionId
+          )
+        : await createAgents();
       
       // Update command router context with initialized agents
       const updatedContext: SystemContext = {
@@ -446,13 +450,15 @@ class ChatBot {
       // Create input with conversation context
       const contextualInput = this.conversation.getFormattedHistory() + ' ' + userInput;
       
-      // Use the Playback agent for action requests with tool call tracing
-      const result = await runWithToolCallTracing(
-        agents.playback, 
-        contextualInput,
-        async (trace) => await this.traceIntegration.processTraceEvent(trace),
-        () => this.traceIntegration.getCurrentSession().sessionId
-      );
+      // Use the Playback agent for action requests (with or without tracing)
+      const result = debug.isTracingEnabled() 
+        ? await runWithToolCallTracing(
+            agents.playback, 
+            contextualInput,
+            async (trace) => await this.traceIntegration.processTraceEvent(trace),
+            () => this.traceIntegration.getCurrentSession().sessionId
+          )
+        : await run(agents.playback, contextualInput);
       this.ui.stopSpinner();
       
       const response = result.finalOutput || 'No response received';
@@ -515,13 +521,15 @@ class ChatBot {
       // Create input with conversation context
       const contextualInput = this.conversation.getFormattedHistory() + ' ' + userInput;
       
-      // Use the Lookup agent for information requests with tool call tracing
-      const result = await runWithToolCallTracing(
-        agents.lookup, 
-        contextualInput,
-        async (trace) => await this.traceIntegration.processTraceEvent(trace),
-        () => this.traceIntegration.getCurrentSession().sessionId
-      );
+      // Use the Lookup agent for information requests (with or without tracing)
+      const result = debug.isTracingEnabled() 
+        ? await runWithToolCallTracing(
+            agents.lookup, 
+            contextualInput,
+            async (trace) => await this.traceIntegration.processTraceEvent(trace),
+            () => this.traceIntegration.getCurrentSession().sessionId
+          )
+        : await run(agents.lookup, contextualInput);
       this.ui.stopSpinner();
       
       const response = result.finalOutput || 'No response received';
