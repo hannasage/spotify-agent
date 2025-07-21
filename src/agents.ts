@@ -2,6 +2,7 @@ import { Agent, MCPServerStdio } from '@openai/agents';
 import { AgentConfig } from './types';
 import { loadPrompt, validatePrompts, preloadPrompts } from './utils';
 import { createMCPToolCallInterceptor, MCPToolCallInterceptor } from './lib/mcpToolCallInterceptor';
+import { tavilyWebSearchTool } from './tools/lookupTools';
 
 /**
  * Agent factory and configuration module
@@ -77,7 +78,7 @@ export async function createAgents(
     name: 'Lookup Agent',
     model: 'gpt-4o-mini',
     instructions: loadPrompt('lookup-agent'),
-    tools: [],
+    tools: [tavilyWebSearchTool],
     mcpServers: [mcpServer]
   });
 
