@@ -15,7 +15,7 @@ class SpotifyAgentClient {
         this.connectionText = document.getElementById('connection-text');
         this.agentStatus = document.getElementById('agent-status');
         this.traceStatus = document.getElementById('trace-status');
-        this.agentToggle = document.getElementById('agent-toggle');
+        // Removed agentToggle reference
 
         this.initializeSocket();
         this.setupEventListeners();
@@ -54,10 +54,7 @@ class SpotifyAgentClient {
             this.addMessage(data.message, data.type === 'error' ? 'error' : 'agent', data.timestamp, data.agent);
         });
 
-        this.socket.on('conversation_cleared', () => {
-            this.clearMessages();
-            this.addMessage('Conversation history cleared.', 'agent', new Date().toISOString());
-        });
+        // Removed conversation_cleared handler
     }
 
     setupEventListeners() {
@@ -98,11 +95,19 @@ class SpotifyAgentClient {
     updateAgentStatus(agentsReady, tracingEnabled) {
         if (agentsReady) {
             this.agentStatus.textContent = '🤖 Agents Ready';
+            // Update the status dot to green when agents are ready
+            const agentStatusItem = this.agentStatus.closest('.status-item');
+            const statusDot = agentStatusItem.querySelector('.status-dot');
+            statusDot.className = 'status-dot status-connected';
         } else {
             this.agentStatus.textContent = '⏳ Initializing Agents...';
         }
 
         this.traceStatus.textContent = tracingEnabled ? '📊 Tracing: ON' : '📊 Tracing: OFF';
+        // Update the status dot for tracing
+        const traceStatusItem = this.traceStatus.closest('.status-item');
+        const traceDot = traceStatusItem.querySelector('.status-dot');
+        traceDot.className = tracingEnabled ? 'status-dot status-connected' : 'status-dot status-disconnected';
     }
 
     addMessage(content, type, timestamp, agent = null) {
@@ -218,27 +223,6 @@ class SpotifyAgentClient {
     clearMessages() {
         this.messagesContainer.innerHTML = '';
     }
-
-    toggleAgent() {
-        const agents = ['auto', 'playback', 'lookup'];
-        const currentIndex = agents.indexOf(this.currentAgent);
-        const nextIndex = (currentIndex + 1) % agents.length;
-        this.currentAgent = agents[nextIndex];
-
-        const labels = {
-            'auto': '🤖 Auto-detect Agent',
-            'playback': '🎵 Playback Agent',
-            'lookup': '🔍 Lookup Agent'
-        };
-
-        this.agentToggle.textContent = labels[this.currentAgent];
-    }
-
-    clearConversation() {
-        if (confirm('Clear conversation history?')) {
-            this.socket.emit('clear_conversation');
-        }
-    }
 }
 
 // Global functions for HTML event handlers
@@ -251,13 +235,7 @@ function sendMessage(event) {
     client.sendMessage();
 }
 
-function clearConversation() {
-    client.clearConversation();
-}
-
-function toggleAgent() {
-    client.toggleAgent();
-}
+// Removed clearConversation and toggleAgent functions per user request
 
 function sendExampleMessage(message) {
     if (client && client.messageInput) {

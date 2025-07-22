@@ -147,11 +147,7 @@ class SpotifyAgentWebServer {
         }
       });
 
-      // Handle conversation clear request
-      socket.on('clear_conversation', () => {
-        this.conversation.clearHistory();
-        this.io.emit('conversation_cleared');
-      });
+      // Removed clear conversation handler per user request
 
       // Handle disconnect
       socket.on('disconnect', () => {
