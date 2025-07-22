@@ -83,6 +83,13 @@ npm run build
 npm start
 ```
 
+### Web Interface (Optional)
+For a visual chat interface, you can also run the web version:
+```bash
+npm run web
+```
+Then open http://localhost:3000 in your browser for a real-time chat interface.
+
 ### First Experience
 ```bash
 🎵 SPOTIFY AGENT
@@ -190,6 +197,8 @@ src/
 ```
 
 ### Available Scripts
+
+#### CLI Interface
 ```bash
 npm run build          # Build TypeScript
 npm run dev            # Development mode with auth
@@ -198,6 +207,45 @@ npm start              # Production mode
 npm run clean          # Clean build artifacts
 npm run eval           # Run evaluation system on trace data
 ```
+
+#### Web Interface
+```bash
+npm run web            # Web interface (with tracing)
+npm run web:dev        # Web interface (no tracing)
+npm run web:debug      # Web interface (debug mode)
+```
+
+## Web Interface
+
+### Features
+- **Real-time Chat**: Socket.IO powered communication with agents
+- **Beautiful UI**: Minimal design using Pico.css framework  
+- **Mobile Responsive**: Works on desktop, tablet, and mobile
+- **Agent Selection**: Choose between auto-detect, playback, or lookup agents
+- **Conversation History**: Persistent chat history with timestamps
+- **Connection Status**: Visual indicators for server connection and agent status
+- **Trace Integration**: Optional trace viewing (respects --no-trace flag)
+
+### Getting Started
+1. Install dependencies: `npm install`
+2. Start the web server: `npm run web:dev`
+3. Open http://localhost:3000 in your browser
+4. Start chatting with your Spotify agents!
+
+### Web Interface Architecture
+```
+web/
+├── server.ts          # Express + Socket.IO server
+└── public/            # Static web files
+    ├── index.html     # Main interface (Pico.css)
+    └── app.js         # Socket.IO client + UI logic
+```
+
+### Simultaneous Usage
+The web interface and CLI can run simultaneously:
+- Use CLI for quick commands and development
+- Use web interface for extended conversations and visual feedback
+- Both share the same agent instances and conversation history
 
 ### Development Features
 - **Enhanced Debugging**: Comprehensive trace collection with MCP tool call interception
