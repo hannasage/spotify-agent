@@ -93,7 +93,7 @@ Then open http://localhost:3000 in your browser for a real-time chat interface.
 ### First Experience
 ```bash
 🎵 SPOTIFY AGENT
-✅ Multi-agent system ready! Spotify Assistant + Queue Manager + Command Router available.
+✅ Spotify Agent ready! Spotify Assistant + Queue Manager + Command Router available.
 
 🎧 You: start auto queue
 🎯 Auto-queue monitor started! Will add 4 songs every 10 minutes.

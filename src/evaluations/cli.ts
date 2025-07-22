@@ -161,8 +161,7 @@ class EvaluationCLI {
     console.log('\n⚡ PERFORMANCE METRICS:');
     console.log(`  • Overall Average Response Time: ${result.metrics.performance.averageResponseTime.toFixed(0)}ms`);
     console.log(`  • System Commands: ${result.metrics.performance.agentResponseTimes.systemCommands.toFixed(0)}ms`);
-    console.log(`  • Lookup Agent: ${result.metrics.performance.agentResponseTimes.lookupAgent.toFixed(0)}ms`);
-    console.log(`  • Playback Agent: ${result.metrics.performance.agentResponseTimes.playbackAgent.toFixed(0)}ms`);
+    console.log(`  • Spotify Agent: ${result.metrics.performance.agentResponseTimes.spotifyAgent.toFixed(0)}ms`);
     console.log(`  • Total Tool Calls: ${result.metrics.performance.totalToolCalls}`);
     console.log(`  • Tool Call Success Rate: ${result.metrics.performance.toolCallSuccessRate.toFixed(1)}%`);
     console.log(`  • Average Tool Call Duration: ${result.metrics.performance.averageToolCallDuration.toFixed(0)}ms`);
@@ -191,9 +190,8 @@ class EvaluationCLI {
     
     // Agent performance
     console.log('\n🤖 AGENT PERFORMANCE:');
-    console.log(`  • Lookup Agent: ${result.dimensions.agents.lookupAgent.successRate.toFixed(1)}% success rate`);
-    console.log(`  • Playback Agent: ${result.dimensions.agents.playbackAgent.successRate.toFixed(1)}% success rate`);
-    console.log(`  • Command Router: ${result.dimensions.agents.commandRouter.successRate.toFixed(1)}% success rate`);
+    console.log(`  • Unified Spotify Agent: ${result.dimensions.agents.spotifyAgent.successRate.toFixed(1)}% success rate`);
+    console.log(`  • Command Router: ${result.dimensions.agents.commandRouter?.successRate?.toFixed(1) || 0}% success rate`);
     
     // Tool usage
     console.log('\n🛠️  TOOL USAGE:');
@@ -236,17 +234,13 @@ class EvaluationCLI {
     
     // Calculate per-agent averages (only include sessions with non-zero values)
     const systemCommandTimes = results.map(r => r.metrics.performance.agentResponseTimes.systemCommands).filter(t => t > 0);
-    const lookupAgentTimes = results.map(r => r.metrics.performance.agentResponseTimes.lookupAgent).filter(t => t > 0);
-    const playbackAgentTimes = results.map(r => r.metrics.performance.agentResponseTimes.playbackAgent).filter(t => t > 0);
+    const spotifyAgentTimes = results.map(r => r.metrics.performance.agentResponseTimes.spotifyAgent).filter(t => t > 0);
     
     const avgSystemCommandTime = systemCommandTimes.length > 0 
       ? systemCommandTimes.reduce((sum, t) => sum + t, 0) / systemCommandTimes.length 
       : 0;
-    const avgLookupAgentTime = lookupAgentTimes.length > 0 
-      ? lookupAgentTimes.reduce((sum, t) => sum + t, 0) / lookupAgentTimes.length 
-      : 0;
-    const avgPlaybackAgentTime = playbackAgentTimes.length > 0 
-      ? playbackAgentTimes.reduce((sum, t) => sum + t, 0) / playbackAgentTimes.length 
+    const avgSpotifyAgentTime = spotifyAgentTimes.length > 0 
+      ? spotifyAgentTimes.reduce((sum, t) => sum + t, 0) / spotifyAgentTimes.length 
       : 0;
     
     // Grade distribution
@@ -259,8 +253,7 @@ class EvaluationCLI {
     console.log(`  • Average Score: ${avgScore.toFixed(1)}/100`);
     console.log(`  • Overall Average Response Time: ${avgResponseTime.toFixed(0)}ms`);
     console.log(`  • System Commands: ${avgSystemCommandTime.toFixed(0)}ms (${systemCommandTimes.length} sessions)`);
-    console.log(`  • Lookup Agent: ${avgLookupAgentTime.toFixed(0)}ms (${lookupAgentTimes.length} sessions)`);
-    console.log(`  • Playback Agent: ${avgPlaybackAgentTime.toFixed(0)}ms (${playbackAgentTimes.length} sessions)`);
+    console.log(`  • Spotify Agent: ${avgSpotifyAgentTime.toFixed(0)}ms (${spotifyAgentTimes.length} sessions)`);
     console.log(`  • Average Tool Call Success Rate: ${avgToolCallSuccess.toFixed(1)}%`);
     console.log(`  • Average Routing Success: ${avgRoutingSuccess.toFixed(1)}%`);
     
@@ -501,22 +494,19 @@ class EvaluationCLI {
     const v1AvgScore = v1Results.reduce((sum, r) => sum + r.score, 0) / v1Results.length;
     const v1AvgResponseTime = v1Results.reduce((sum, r) => sum + r.metrics.performance.averageResponseTime, 0) / v1Results.length;
     const v1AvgSystemTime = this.getAvgAgentTime(v1Results, 'systemCommands');
-    const v1AvgLookupTime = this.getAvgAgentTime(v1Results, 'lookupAgent');
-    const v1AvgPlaybackTime = this.getAvgAgentTime(v1Results, 'playbackAgent');
-
+    const v1AvgSpotifyTime = this.getAvgAgentTime(v1Results, 'spotifyAgent');
+    
     // Calculate averages for v2
     const v2AvgScore = v2Results.reduce((sum, r) => sum + r.score, 0) / v2Results.length;
     const v2AvgResponseTime = v2Results.reduce((sum, r) => sum + r.metrics.performance.averageResponseTime, 0) / v2Results.length;
     const v2AvgSystemTime = this.getAvgAgentTime(v2Results, 'systemCommands');
-    const v2AvgLookupTime = this.getAvgAgentTime(v2Results, 'lookupAgent');
-    const v2AvgPlaybackTime = this.getAvgAgentTime(v2Results, 'playbackAgent');
+    const v2AvgSpotifyTime = this.getAvgAgentTime(v2Results, 'spotifyAgent');
 
     // Calculate changes
     const scoreChange = v2AvgScore - v1AvgScore;
     const responseTimeChange = v2AvgResponseTime - v1AvgResponseTime;
     const systemTimeChange = v2AvgSystemTime - v1AvgSystemTime;
-    const lookupTimeChange = v2AvgLookupTime - v1AvgLookupTime;
-    const playbackTimeChange = v2AvgPlaybackTime - v1AvgPlaybackTime;
+    const spotifyTimeChange = v2AvgSpotifyTime - v1AvgSpotifyTime;
 
     console.log(`\n🎯 PERFORMANCE CHANGES:`);
     console.log(`  • Overall Score: ${v1AvgScore.toFixed(1)} → ${v2AvgScore.toFixed(1)} (${this.formatChange(scoreChange, 1, true)} ${this.getChangeIcon(scoreChange, true)})`);
@@ -526,12 +516,8 @@ class EvaluationCLI {
       console.log(`  • System Commands: ${v1AvgSystemTime.toFixed(0)}ms → ${v2AvgSystemTime.toFixed(0)}ms (${this.formatChange(systemTimeChange, 0)} ${this.getChangeIcon(systemTimeChange, false)})`);
     }
     
-    if (v1AvgLookupTime > 0 && v2AvgLookupTime > 0) {
-      console.log(`  • Lookup Agent: ${v1AvgLookupTime.toFixed(0)}ms → ${v2AvgLookupTime.toFixed(0)}ms (${this.formatChange(lookupTimeChange, 0)} ${this.getChangeIcon(lookupTimeChange, false)})`);
-    }
-    
-    if (v1AvgPlaybackTime > 0 && v2AvgPlaybackTime > 0) {
-      console.log(`  • Playback Agent: ${v1AvgPlaybackTime.toFixed(0)}ms → ${v2AvgPlaybackTime.toFixed(0)}ms (${this.formatChange(playbackTimeChange, 0)} ${this.getChangeIcon(playbackTimeChange, false)})`);
+    if (v1AvgSpotifyTime > 0 && v2AvgSpotifyTime > 0) {
+      console.log(`  • Spotify Agent: ${v1AvgSpotifyTime.toFixed(0)}ms → ${v2AvgSpotifyTime.toFixed(0)}ms (${this.formatChange(spotifyTimeChange, 0)} ${this.getChangeIcon(spotifyTimeChange, false)})`);
     }
 
     console.log(`\n📊 SESSION COUNTS:`);
@@ -542,7 +528,7 @@ class EvaluationCLI {
   /**
    * Get average agent time for a specific agent type
    */
-  private getAvgAgentTime(results: EvaluationResult[], agentType: 'systemCommands' | 'lookupAgent' | 'playbackAgent'): number {
+  private getAvgAgentTime(results: EvaluationResult[], agentType: 'systemCommands' | 'spotifyAgent'): number {
     const times = results.map(r => r.metrics.performance.agentResponseTimes[agentType]).filter(t => t > 0);
     return times.length > 0 ? times.reduce((sum, t) => sum + t, 0) / times.length : 0;
   }

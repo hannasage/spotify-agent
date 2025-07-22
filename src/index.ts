@@ -8,7 +8,7 @@ import { ERROR_MESSAGES, SUCCESS_MESSAGES } from './constants';
 import { ConversationSession } from './conversation';
 import { QueueMonitorService } from './queueMonitor';
 import { createAgents, cleanupMCPServer } from './agents';
-import { CommandRouter, SystemContext } from './tools';
+import { SystemContext } from './tools';
 import { createTraceIntegration } from './lib/traceIntegration';
 import { runWithToolCallTracing } from './lib/toolCallTracer';
 import { run } from '@openai/agents';
@@ -30,7 +30,6 @@ class ChatBot {
   private ui: UIManager;
   private conversation: ConversationSession;
   private queueMonitor: QueueMonitorService;
-  private commandRouter: CommandRouter;
   private traceIntegration: ReturnType<typeof createTraceIntegration>;
 
   constructor() {
@@ -41,15 +40,6 @@ class ChatBot {
     // Initialize trace integration (conditionally based on --no-trace flag)
     const traceDir = process.env.TRACE_DIRECTORY || './data/traces';
     this.traceIntegration = createTraceIntegration(traceDir, debug.isTracingEnabled());
-    
-    // Initialize command router with system context
-    const systemContext: SystemContext = {
-      ui: this.ui,
-      conversation: this.conversation,
-      queueMonitor: this.queueMonitor,
-      agents: null // Will be updated when agents are initialized
-    };
-    this.commandRouter = new CommandRouter(systemContext);
     
     this.rl = readline.createInterface({
       input: process.stdin,
@@ -118,10 +108,9 @@ class ChatBot {
         return true;
         
       case '/agents':
-        this.ui.showInfo('Multi-agent system status:');
-        this.ui.showInfo('🎵 Playback Agent: Handles music playback actions and queue management');
-        this.ui.showInfo('🔍 Lookup Agent: Specializes in music information retrieval and search');
-        this.ui.showInfo('💬 Communication: Agents coordinate via handoffs for seamless experience');
+        this.ui.showInfo('Spotify Agent system status:');
+        this.ui.showInfo('🎵 Spotify Agent: Handles all music operations - playback, information, and system commands');
+        this.ui.showInfo('💬 Single Point of Contact: No routing overhead, direct intelligent responses');
         this.ui.showInfo(`🤖 Auto-queue monitor: ${this.queueMonitor.isRunning() ? 'ACTIVE' : 'INACTIVE'}`);
         await this.traceEvent('agents_status_requested', {
           queueMonitorRunning: this.queueMonitor.isRunning()
@@ -246,26 +235,29 @@ class ChatBot {
     });
     
     try {
+      // Create system context for agent initialization
+      const systemContext: SystemContext = {
+        ui: this.ui,
+        conversation: this.conversation,
+        queueMonitor: this.queueMonitor,
+        agents: null // Will be set after agent creation
+      };
+      
       // Only pass trace callbacks if tracing is enabled
       agents = debug.isTracingEnabled() 
         ? await createAgents(
             async (trace) => await this.traceIntegration.processTraceEvent(trace),
-            () => this.traceIntegration.getCurrentSession().sessionId
+            () => this.traceIntegration.getCurrentSession().sessionId,
+            systemContext
           )
-        : await createAgents();
+        : await createAgents(undefined, undefined, systemContext);
       
-      // Update command router context with initialized agents
-      const updatedContext: SystemContext = {
-        ui: this.ui,
-        conversation: this.conversation,
-        queueMonitor: this.queueMonitor,
-        agents: agents
-      };
-      this.commandRouter.updateContext(updatedContext);
+      // Update system context with the created agent
+      systemContext.agents = agents;
       
       this.ui.showConnectionStatus('connected');
       this.ui.showWelcomeInstructions();
-      this.ui.showInfo('🤖 Multi-agent system ready! Playback Agent + Lookup Agent + Command Router available.');
+      this.ui.showInfo('🤖 Spotify Agent ready! All music operations handled by single intelligent agent.');
       
       // Trace successful initialization
       await this.traceEvent('agents_initialized', {
@@ -334,77 +326,17 @@ class ChatBot {
     });
     
     try {
-      // Use command router for intelligent parsing
-      debug.log(`📥 [INPUT] Processing: "${userInput}"`);
-      const routerResult = await this.commandRouter.routeCommand(userInput);
+      // Use unified agent for all requests
+      debug.log(`📥 [INPUT] Processing with unified agent: "${userInput}"`);
       
-      // Trace router result
-      await this.traceEvent('command_router_result', {
+      // Trace unified agent interaction start
+      await this.traceEvent('unified_agent_interaction_start', {
         input: userInput,
-        resultType: routerResult.type,
-        content: routerResult.content
+        messageCount: this.conversation.getMessageCount()
       });
       
-      switch (routerResult.type) {
-        case 'system_success':
-          // System command executed successfully
-          debug.log(`✅ [INPUT] System command completed: ${routerResult.content}`);
-          await this.traceEvent('system_command_success', {
-            command: userInput,
-            result: routerResult.content
-          });
-          this.rl.prompt();
-          return;
-          
-        case 'error':
-          // System command failed
-          this.ui.showError('Command failed', routerResult.content);
-          await this.traceEvent('system_command_error', {
-            command: userInput,
-            error: routerResult.content
-          });
-          this.rl.prompt();
-          return;
-          
-        case 'clarification':
-          // Agent needs clarification
-          this.ui.showInfo(`🤖 ${routerResult.content}`);
-          await this.traceEvent('agent_clarification', {
-            input: userInput,
-            clarification: routerResult.content
-          });
-          this.rl.prompt();
-          return;
-          
-        case 'playback':
-          // Route to Playback agent
-          await this.traceEvent('routing_to_playback', {
-            input: userInput,
-            content: routerResult.content
-          });
-          await this.handlePlaybackInteraction(routerResult.content);
-          this.rl.prompt();
-          return;
-          
-        case 'lookup':
-          // Route to Lookup agent
-          await this.traceEvent('routing_to_lookup', {
-            input: userInput,
-            content: routerResult.content
-          });
-          await this.handleLookupInteraction(routerResult.content);
-          this.rl.prompt();
-          return;
-          
-        default:
-          // Default to Lookup interaction
-          await this.traceEvent('routing_to_lookup_default', {
-            input: userInput,
-            reason: 'default_route'
-          });
-          await this.handleLookupInteraction(userInput);
-          this.rl.prompt();
-      }
+      await this.handleSpotifyAgentInteraction(userInput);
+      this.rl.prompt();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       debug.log(`❌ [INPUT] Error processing input: ${errorMessage}`);
@@ -416,33 +348,33 @@ class ChatBot {
         stack: error instanceof Error ? error.stack : undefined
       });
       
-      // Fallback to Lookup interaction on any error
-      await this.handleLookupInteraction(userInput);
+      // Show error to user
+      this.ui.showError('Request failed', errorMessage);
       this.rl.prompt();
     }
   }
 
 
   /**
-   * Handle Playback interaction with the Playback agent
-   * @param userInput - The user input to process (playback actions)
+   * Handle interaction with the Spotify Agent
+   * @param userInput - The user input to process (all types of requests)
    * @private
    */
-  private async handlePlaybackInteraction(userInput: string): Promise<void> {
+  private async handleSpotifyAgentInteraction(userInput: string): Promise<void> {
     if (!agents) {
-      await this.traceEvent('playback_agent_not_initialized', { input: userInput });
-      this.ui.showError('Agents not initialized', 'Please wait for the system to connect');
+      await this.traceEvent('spotify_agent_not_initialized', { input: userInput });
+      this.ui.showError('Agent not initialized', 'Please wait for the system to connect');
       return;
     }
 
     try {
-      // Trace playback interaction start
-      await this.traceEvent('playback_interaction_start', {
+      // Trace Spotify Agent interaction start
+      await this.traceEvent('spotify_agent_interaction_start', {
         input: userInput,
         messageCount: this.conversation.getMessageCount()
       });
       
-      this.ui.startSpinner('Executing playback action...');
+      this.ui.startSpinner('Processing your request...');
       
       // Add user message to conversation history
       this.conversation.addUserMessage(userInput);
@@ -450,15 +382,15 @@ class ChatBot {
       // Create input with conversation context
       const contextualInput = this.conversation.getFormattedHistory() + ' ' + userInput;
       
-      // Use the Playback agent for action requests (with or without tracing)
+      // Use the Spotify Agent for all requests (with or without tracing)
       const result = debug.isTracingEnabled() 
         ? await runWithToolCallTracing(
-            agents.playback, 
+            agents.spotify, 
             contextualInput,
             async (trace) => await this.traceIntegration.processTraceEvent(trace),
             () => this.traceIntegration.getCurrentSession().sessionId
           )
-        : await run(agents.playback, contextualInput);
+        : await run(agents.spotify, contextualInput);
       this.ui.stopSpinner();
       
       const response = result.finalOutput || 'No response received';
@@ -466,8 +398,8 @@ class ChatBot {
       // Add assistant response to conversation history
       this.conversation.addAssistantMessage(response);
       
-      // Trace successful playback interaction
-      await this.traceEvent('playback_interaction_success', {
+      // Trace successful Spotify Agent interaction
+      await this.traceEvent('spotify_agent_interaction_success', {
         input: userInput,
         response: response,
         responseLength: response.length,
@@ -479,85 +411,14 @@ class ChatBot {
       this.ui.stopSpinner();
       const errorMessage = error instanceof Error ? error.message : String(error);
       
-      // Trace playback interaction error
-      await this.traceEvent('playback_interaction_error', {
+      // Trace unified agent interaction error
+      await this.traceEvent('unified_agent_interaction_error', {
         input: userInput,
         error: errorMessage,
         stack: error instanceof Error ? error.stack : undefined
       });
       
-      this.ui.showError('Playback action failed', errorMessage);
-      if (error instanceof Error && error.stack) {
-        console.log(this.ui.formatBotResponse('Stack trace: ' + error.stack));
-      }
-      console.log('');
-    }
-  }
-
-  /**
-   * Handle Lookup interaction with the Lookup agent
-   * @param userInput - The user input to process (information requests)
-   * @private
-   */
-  private async handleLookupInteraction(userInput: string): Promise<void> {
-    if (!agents) {
-      await this.traceEvent('lookup_agent_not_initialized', { input: userInput });
-      this.ui.showError('Agents not initialized', 'Please wait for the system to connect');
-      return;
-    }
-
-    try {
-      // Trace lookup interaction start
-      await this.traceEvent('lookup_interaction_start', {
-        input: userInput,
-        messageCount: this.conversation.getMessageCount()
-      });
-      
-      this.ui.startSpinner('Looking up information...');
-      
-      // Add user message to conversation history
-      this.conversation.addUserMessage(userInput);
-      
-      // Create input with conversation context
-      const contextualInput = this.conversation.getFormattedHistory() + ' ' + userInput;
-      
-      // Use the Lookup agent for information requests (with or without tracing)
-      const result = debug.isTracingEnabled() 
-        ? await runWithToolCallTracing(
-            agents.lookup, 
-            contextualInput,
-            async (trace) => await this.traceIntegration.processTraceEvent(trace),
-            () => this.traceIntegration.getCurrentSession().sessionId
-          )
-        : await run(agents.lookup, contextualInput);
-      this.ui.stopSpinner();
-      
-      const response = result.finalOutput || 'No response received';
-      
-      // Add assistant response to conversation history
-      this.conversation.addAssistantMessage(response);
-      
-      // Trace successful lookup interaction
-      await this.traceEvent('lookup_interaction_success', {
-        input: userInput,
-        response: response,
-        responseLength: response.length,
-        messageCount: this.conversation.getMessageCount()
-      });
-      
-      console.log(this.ui.formatBotResponse(response) + '\n');
-    } catch (error) {
-      this.ui.stopSpinner();
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      
-      // Trace lookup interaction error
-      await this.traceEvent('lookup_interaction_error', {
-        input: userInput,
-        error: errorMessage,
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      
-      this.ui.showError('Information lookup failed', errorMessage);
+      this.ui.showError('Request failed', errorMessage);
       if (error instanceof Error && error.stack) {
         console.log(this.ui.formatBotResponse('Stack trace: ' + error.stack));
       }

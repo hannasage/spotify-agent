@@ -106,8 +106,7 @@ export class SpotifyAgentEvaluator {
     let responseCount = 0;
     const agentResponseTimes = {
       systemCommands: [] as number[],
-      lookupAgent: [] as number[],
-      playbackAgent: [] as number[]
+      spotifyAgent: [] as number[]
     };
 
     for (const input of userInputs) {
@@ -123,7 +122,15 @@ export class SpotifyAgentEvaluator {
         ? new Date(userInputs[nextInputIndex]?.timestamp || new Date()) 
         : new Date(Date.now()); // Use current time if this is the last input
       
-      // Look for agent-specific routing first (within this input's time window)
+      // Look for Spotify Agent interaction (new architecture)
+      const spotifyAgentSuccess = traces.find(trace => {
+        const traceTime = new Date(trace.timestamp);
+        return traceTime > inputTime && 
+               traceTime < nextInputTime &&
+               trace.type === 'spotify_agent_interaction_success';
+      });
+      
+      // Check for legacy routing patterns for backward compatibility
       const lookupRouting = traces.find(trace => {
         const traceTime = new Date(trace.timestamp);
         return traceTime > inputTime && 
@@ -138,8 +145,11 @@ export class SpotifyAgentEvaluator {
                trace.type === 'routing_to_playback';
       });
       
-      if (lookupRouting) {
-        agentType = 'lookupAgent';
+      if (spotifyAgentSuccess) {
+        agentType = 'spotifyAgent';
+        finalResponse = spotifyAgentSuccess;
+      } else if (lookupRouting) {
+        agentType = 'spotifyAgent'; // Map legacy lookup to unified agent
         finalResponse = traces.find(trace => {
           const traceTime = new Date(trace.timestamp);
           return traceTime > new Date(lookupRouting.timestamp) &&
@@ -147,7 +157,7 @@ export class SpotifyAgentEvaluator {
                  trace.type === 'lookup_interaction_success';
         });
       } else if (playbackRouting) {
-        agentType = 'playbackAgent';
+        agentType = 'spotifyAgent'; // Map legacy playback to unified agent
         finalResponse = traces.find(trace => {
           const traceTime = new Date(trace.timestamp);
           return traceTime > new Date(playbackRouting.timestamp) &&
@@ -198,11 +208,8 @@ export class SpotifyAgentEvaluator {
         systemCommands: agentResponseTimes.systemCommands.length > 0 
           ? agentResponseTimes.systemCommands.reduce((sum, time) => sum + time, 0) / agentResponseTimes.systemCommands.length 
           : 0,
-        lookupAgent: agentResponseTimes.lookupAgent.length > 0 
-          ? agentResponseTimes.lookupAgent.reduce((sum, time) => sum + time, 0) / agentResponseTimes.lookupAgent.length 
-          : 0,
-        playbackAgent: agentResponseTimes.playbackAgent.length > 0 
-          ? agentResponseTimes.playbackAgent.reduce((sum, time) => sum + time, 0) / agentResponseTimes.playbackAgent.length 
+        spotifyAgent: agentResponseTimes.spotifyAgent.length > 0 
+          ? agentResponseTimes.spotifyAgent.reduce((sum, time) => sum + time, 0) / agentResponseTimes.spotifyAgent.length 
           : 0
       },
       totalToolCalls: toolCalls.length,
@@ -382,8 +389,7 @@ export class SpotifyAgentEvaluator {
         confidence: 85 // Placeholder
       },
       agentSelection: {
-        lookupAgent: routingToLookup.length,
-        playbackAgent: routingToPlayback.length,
+        spotifyAgent: routingToLookup.length + routingToPlayback.length + traces.filter(trace => trace.type === 'spotify_agent_interaction_start').length, // Combined legacy routing and new agent
         systemAgent: 0
       },
       routingLatency: latencyCount > 0 ? totalLatency / latencyCount : 0
@@ -452,17 +458,23 @@ export class SpotifyAgentEvaluator {
    * Evaluate agent performance
    */
   private evaluateAgents(traces: TraceEntry[]): EvaluationDimensions['agents'] {
-    const lookupInteractions = traces.filter(trace => 
-      trace.type.includes('lookup_interaction')
+    // Look for Spotify Agent interactions first
+    const spotifyAgentInteractions = traces.filter(trace => 
+      trace.type.includes('spotify_agent_interaction')
     );
-    const playbackInteractions = traces.filter(trace => 
-      trace.type.includes('playback_interaction')
+    
+    // Fall back to legacy interactions for backward compatibility
+    const legacyInteractions = traces.filter(trace => 
+      trace.type.includes('lookup_interaction') || trace.type.includes('playback_interaction')
     );
+    
     const routingResults = TraceAnalysisUtils.getTracesByType(traces, 'command_router_result');
 
+    // Combine Spotify Agent and legacy interactions for the agent performance
+    const allSpotifyInteractions = [...spotifyAgentInteractions, ...legacyInteractions];
+
     return {
-      lookupAgent: this.calculateAgentPerformance(lookupInteractions, 'Lookup Agent'),
-      playbackAgent: this.calculateAgentPerformance(playbackInteractions, 'Playback Agent'),
+      spotifyAgent: this.calculateAgentPerformance(allSpotifyInteractions, 'Spotify Agent'),
       commandRouter: this.calculateAgentPerformance(routingResults, 'Command Router')
     };
   }

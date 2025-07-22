@@ -105,9 +105,9 @@ class SpotifyAgentWebServer {
           this.io.emit('user_message', { message, timestamp: new Date().toISOString() });
 
           // Determine which agent to use (similar to CLI logic)
-          const isPlaybackAction = this.isPlaybackAction(message);
-          const selectedAgent = isPlaybackAction ? this.agents.playback : this.agents.lookup;
-          const agentType = isPlaybackAction ? 'playback' : 'lookup';
+          // Use the Spotify Agent for all requests
+          const selectedAgent = this.agents.spotify;
+          const agentType = 'spotify';
 
           // Get conversation context
           const contextualInput = this.conversation.getFormattedHistory() + ' ' + message;

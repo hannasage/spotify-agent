@@ -77,15 +77,14 @@ export type ConnectionStatus = 'connecting' | 'connected' | 'error';
 /** 
  * Agent configuration structure
  * 
- * Contains the two main agents used in the multi-agent system:
- * - Playback Agent: Handles music playback actions
- * - Lookup Agent: Handles information retrieval
+ * Contains the Spotify Agent that handles all operations:
+ * - Music playback actions and queue management
+ * - Information retrieval and search
+ * - System operations and utilities
  */
 export interface AgentConfig {
-  /** Playback agent for executing music actions */
-  playback: import('@openai/agents').Agent;
-  /** Lookup agent for retrieving music information */
-  lookup: import('@openai/agents').Agent;
+  /** Spotify Agent that handles all music-related operations */
+  spotify: import('@openai/agents').Agent;
 }
 
 /** Auto-queue monitor state */

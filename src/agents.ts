@@ -3,6 +3,7 @@ import { AgentConfig } from './types';
 import { loadPrompt, validatePrompts, preloadPrompts } from './utils';
 import { createMCPToolCallInterceptor, MCPToolCallInterceptor } from './lib/mcpToolCallInterceptor';
 import { tavilyWebSearchTool } from './tools/lookupTools';
+import { createSystemToolsForAgent } from './tools/systemToolsForAgent';
 
 /**
  * Agent factory and configuration module
@@ -37,19 +38,21 @@ async function createMCPServer(): Promise<MCPServerStdio> {
 }
 
 /**
- * Create and configure the agent system
+ * Create and configure the Spotify agent system
  * 
- * This function initializes both the main Spotify agent and the specialized
- * queue manager agent, connecting them to the MCP server for Spotify API access.
+ * This function initializes the Spotify Agent that handles all operations:
+ * playback actions, information retrieval, and system commands.
  * 
  * @param traceCallback - Optional callback for tracing MCP tool calls
  * @param getSessionId - Optional function to get current session ID
- * @returns Object containing both configured agents
+ * @param systemContext - System context for system tools (optional, can be null during startup)
+ * @returns Object containing the Spotify Agent
  * @throws Error if MCP server connection fails
  */
 export async function createAgents(
   traceCallback?: (trace: any) => Promise<void>,
-  getSessionId?: () => string
+  getSessionId?: () => string,
+  systemContext?: any
 ): Promise<AgentConfig> {
   mcpServer = await createMCPServer();
   
@@ -58,31 +61,31 @@ export async function createAgents(
     mcpInterceptor = createMCPToolCallInterceptor(mcpServer, traceCallback, getSessionId);
   }
   
-  // Validate that all required prompts exist
-  validatePrompts(['playback-agent', 'lookup-agent']);
+  // Validate that the Spotify Agent prompt exists
+  validatePrompts(['spotify-agent']);
   
-  // Preload prompts for better performance
-  preloadPrompts(['playback-agent', 'lookup-agent']);
+  // Preload the Spotify Agent prompt for better performance
+  preloadPrompts(['spotify-agent']);
   
-  // Create Playback Agent - specialized in music playback actions
-  const playbackAgent = new Agent({
-    name: 'Playback Agent',
+  // Prepare tools for the Spotify Agent
+  const agentTools = [tavilyWebSearchTool];
+  
+  // Add system tools if system context is available
+  if (systemContext) {
+    const systemTools = createSystemToolsForAgent(systemContext);
+    agentTools.push(...systemTools);
+  }
+  
+  // Create Spotify Agent - handles all operations
+  const spotifyAgent = new Agent({
+    name: 'Spotify Agent',
     model: 'gpt-4o-mini',
-    instructions: loadPrompt('playback-agent'),
-    tools: [],
+    instructions: loadPrompt('spotify-agent'),
+    tools: agentTools,
     mcpServers: [mcpServer]
   });
 
-  // Create Lookup Agent - specialized in music information retrieval
-  const lookupAgent = new Agent({
-    name: 'Lookup Agent',
-    model: 'gpt-4o-mini',
-    instructions: loadPrompt('lookup-agent'),
-    tools: [tavilyWebSearchTool],
-    mcpServers: [mcpServer]
-  });
-
-  return { playback: playbackAgent, lookup: lookupAgent };
+  return { spotify: spotifyAgent };
 }
 
 /**

@@ -40,7 +40,7 @@ export class QueueMonitorService {
    */
   initializeSongPool(agents: AgentConfig): void {
     if (!this.songPool && agents) {
-      this.songPool = new SongPoolManager(agents.lookup);
+      this.songPool = new SongPoolManager(agents.spotify);
       debug.log('🔍 [SONG-POOL] Song pool initialized');
     }
   }
@@ -187,7 +187,7 @@ export class QueueMonitorService {
       // Add songs to queue using simple agent call
       const trackListForPrompt = selectedSongs.map(song => `"${song.name}" by ${song.artist}`).join(', ');
       
-      const result = await run(agents.playback, 
+      const result = await run(agents.spotify, 
         `Add these specific songs to the current playback queue using the addToQueue tool: ${trackListForPrompt}. Respond with confirmation of what was added.`, 
         { maxTurns: AUTO_QUEUE.MAX_TURNS_FALLBACK }
       );

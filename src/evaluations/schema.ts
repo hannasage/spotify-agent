@@ -35,8 +35,7 @@ export interface EvaluationMetrics {
     averageResponseTime: number; // milliseconds
     agentResponseTimes: {
       systemCommands: number; // milliseconds
-      lookupAgent: number; // milliseconds
-      playbackAgent: number; // milliseconds
+      spotifyAgent: number; // milliseconds
     };
     totalToolCalls: number;
     averageToolCallDuration: number; // milliseconds
@@ -83,8 +82,7 @@ export interface EvaluationDimensions {
       confidence: number;
     };
     agentSelection: {
-      lookupAgent: number;
-      playbackAgent: number;
+      spotifyAgent: number;
       systemAgent: number;
     };
     routingLatency: number; // milliseconds
@@ -100,9 +98,8 @@ export interface EvaluationDimensions {
   
   // Agent performance evaluation
   agents: {
-    lookupAgent: AgentPerformance;
-    playbackAgent: AgentPerformance;
-    commandRouter: AgentPerformance;
+    spotifyAgent: AgentPerformance;
+    commandRouter: AgentPerformance; // Legacy - can be removed later
   };
   
   // User interaction patterns
