@@ -1,6 +1,6 @@
 {
   "name": "spotify-agent",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "AI-powered Spotify control agent with auto-queue functionality",
   "main": "dist/index.js",
   "author": "Spotify Agent Developer",

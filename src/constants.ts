@@ -5,7 +5,7 @@
 // Application metadata
 export const APP_METADATA = {
   /** Current application version for tracing and evals */
-  VERSION: 'v1.1',
+  VERSION: 'v1.2',
 } as const;
 
 // Auto-queue system configuration
