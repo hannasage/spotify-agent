@@ -1,4 +1,4 @@
-import { run } from '@openai/agents';
+import { Agent, run } from '@openai/agents';
 import { UIManager } from './ui';
 import { SongHistoryTracker } from './history';
 import { SongPoolManager } from './songPool';
@@ -6,6 +6,8 @@ import { ConversationSession } from './conversation';
 import { debug } from './debug';
 import { AgentConfig } from './types';
 import { AUTO_QUEUE, ERROR_MESSAGES, SUCCESS_MESSAGES, SONG_HISTORY, SONG_POOL } from './constants';
+import { getMCPServer } from './agents';
+import { loadPrompt } from './utils';
 
 /**
  * Monitors and manages the automatic queue system
@@ -184,13 +186,31 @@ export class QueueMonitorService {
         return;
       }
 
-      // Add songs to queue using simple agent call
-      const trackListForPrompt = selectedSongs.map(song => `"${song.name}" by ${song.artist}`).join(', ');
+      // Create fresh agent instance for auto-queue operation to reset turn counter
+      const mcpServer = getMCPServer();
+      if (!mcpServer) {
+        debug.log('🔍 [AUTO-QUEUE] MCP server not available');
+        return;
+      }
+
+      const freshAgent = new Agent({
+        name: 'Auto-Queue Agent',
+        model: 'gpt-4o-mini',
+        instructions: loadPrompt('spotify-agent'),
+        tools: [], // No additional tools needed beyond MCP
+        mcpServers: [mcpServer]
+      });
+
+      // Add songs to queue using fresh agent with clean turn counter
+      const trackIdsForPrompt = selectedSongs.map(song => `${song.id} ("${song.name}" by ${song.artist})`).join(', ');
       
-      const result = await run(agents.spotify, 
-        `Add these specific songs to the current playback queue using the addToQueue tool: ${trackListForPrompt}. Respond with confirmation of what was added.`, 
+      const result = await run(freshAgent, 
+        `Use the addToQueue tool to add these track IDs directly to the current playback queue: ${trackIdsForPrompt}. Do NOT search - use the IDs provided directly. Respond with confirmation only.`, 
         { maxTurns: AUTO_QUEUE.MAX_TURNS_FALLBACK }
       );
+      
+      // Fresh agent instance will be garbage collected automatically after this function
+      debug.log(`🔍 [AUTO-QUEUE] Fresh agent completed with ${result.finalOutput ? 'success' : 'failure'}`);
       
       if (result.finalOutput) {
         // Add to history tracker

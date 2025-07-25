@@ -22,7 +22,7 @@ export const AUTO_QUEUE = {
   /** Maximum turns for primary agent attempt */
   MAX_TURNS_PRIMARY: 15,
   /** Maximum turns for fallback agent attempt */
-  MAX_TURNS_FALLBACK: 8,
+  MAX_TURNS_FALLBACK: 12,
 } as const;
 
 // Song pool configuration

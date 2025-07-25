@@ -4,6 +4,7 @@
 
 import { BaseTool, createSuccessResult, createErrorResult, validateAgents } from './base';
 import { SystemContext, ToolResult } from './types';
+import {AUTO_QUEUE} from "../constants";
 
 /**
  * Tool to start the automatic queue monitoring system
@@ -23,7 +24,7 @@ export class StartAutoQueueTool extends BaseTool {
     }
 
     context.queueMonitor.start(context.agents!);
-    return createSuccessResult('Auto-queue system started! Will add 4 songs every 10 minutes.');
+    return createSuccessResult(`Auto-queue system started! Will add ${AUTO_QUEUE.SONGS_PER_BATCH} songs every ${AUTO_QUEUE.INTERVAL_MS / 1000 / 60} minutes.`);
   }
 }
 

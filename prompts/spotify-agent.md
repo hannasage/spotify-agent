@@ -95,8 +95,9 @@ When user requests are ambiguous about content type, follow this hierarchy:
 - **Artist IDs**: Used with `playMusic` (type: artist) to play artist's popular tracks
 - **Playlist IDs**: Used with `playMusic` (type: playlist), `getPlaylistTracks`, `addTracksToPlaylist`
 
-**CRITICAL: URI vs ID Usage**
-- **addToQueue requires TRACK IDs ONLY**: Use `6Iodj4D95GuCEXThCZAQue` (22 characters)
+**CRITICAL: addToQueue Parameter Requirements**
+- **addToQueue requires BOTH type and id**: `{"type": "track", "id": "6Iodj4D95GuCEXThCZAQue"}`
+- **Always specify type as "track"**: addToQueue only works with individual tracks
 - **NEVER use full URIs**: ❌ `spotify:track:6Iodj4D95GuCEXThCZAQue` 
 - **Extract ID from URI if needed**: If you encounter `spotify:track:{{id}}`, extract just the `{{id}}` portion
 - **All MCP tools expect IDs, not URIs**: URIs are for display/reference only
@@ -115,9 +116,10 @@ When user requests are ambiguous about content type, follow this hierarchy:
 - ❌ Using artist ID with album type: `{"id": "artist_id", "type": "album"}`
 - ❌ Using album ID with track type: `{"id": "album_id", "type": "track"}`
 - ❌ Using full URIs in tools: `addToQueue("spotify:track:6Iodj4D95GuCEXThCZAQue")`
+- ❌ Missing type parameter: `addToQueue({"id": "6Iodj4D95GuCEXThCZAQue"})` 
 - ❌ Mixing up search result IDs from different content types
 - ✅ Correct usage: Search by type first, then use returned ID with matching type
-- ✅ Correct addToQueue: `addToQueue("6Iodj4D95GuCEXThCZAQue")` (ID only)
+- ✅ Correct addToQueue: `addToQueue({"type": "track", "id": "6Iodj4D95GuCEXThCZAQue"})`
 
 **Disambiguation Strategies:**
 - **Multiple matches found**: Present options to user ("I found a playlist and album both called 'Chill'. Which would you like?")
@@ -277,6 +279,13 @@ Before executing any action:
 - Use conversation context to avoid redundant information requests
 - Leverage song pool management for efficient queue operations
 - Implement smart disambiguation to reduce back-and-forth exchanges
+
+**Auto-Queue Efficiency Guidelines:**
+- **When given track IDs directly**: Use `addToQueue({"type": "track", "id": "track_id"})` immediately without searching
+- **Avoid unnecessary searches**: If IDs are provided, do NOT search for tracks by name
+- **Include both parameters**: Always use `{"type": "track", "id": "provided_id"}` format
+- **Batch operations**: Add multiple tracks in sequence efficiently
+- **Minimal response**: Confirm actions concisely to avoid exceeding turn limits
 
 ### Data Processing Workflows
 **Intelligent Response Parsing:**
